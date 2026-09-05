@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
+  <!-- Sky -->
+  <rect width="800" height="500" fill="#475569" />
+
+  <!-- Mountain Wall along NH-10 -->
+  <polygon points="0,0 450,0 350,380 0,430" fill="#1e293b" />
+  
+  <!-- Falling Rocks / Slide Path -->
+  <polygon points="120,50 320,120 380,380 200,430" fill="#78350f" opacity="0.8" />
+  <circle cx="280" cy="350" r="28" fill="#78716c" />
+  <circle cx="340" cy="390" r="35" fill="#57534e" />
+  <circle cx="210" cy="390" r="24" fill="#a8a29e" />
+
+  <!-- Road -->
+  <polygon points="300,380 800,350 800,470 250,500" fill="#334155" />
+  <line x1="300" y1="420" x2="800" y2="400" stroke="#facc15" stroke-width="4" stroke-dasharray="20,15" />
+
+  <!-- Teesta River Gorge on the Right -->
+  <polygon points="580,450 800,430 800,500 580,500" fill="#0284c7" />
+
+  <!-- Warning Banner -->
+  <rect x="20" y="20" width="410" height="75" rx="10" fill="#9a3412e6" stroke="#fdba74" stroke-width="2" />
+  <text x="40" y="50" font-family="Arial, sans-serif" font-weight="bold" font-size="18" fill="#ffffff">NH-10 PAGLA JHORA ROCKFALL</text>
+  <text x="40" y="75" font-family="Arial, sans-serif" font-size="13" fill="#ffedd5">Sikkim Lifeline | Active Sliding Zone | Escort Convoy Only</text>
+</svg>

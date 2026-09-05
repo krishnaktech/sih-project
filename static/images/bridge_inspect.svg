@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
+  <rect width="800" height="500" fill="#0284c7" opacity="0.3" />
+  <rect y="250" width="800" height="250" fill="#0369a1" />
+  <!-- Bridge Structure -->
+  <rect x="0" y="210" width="800" height="35" fill="#334155" />
+  <rect x="250" y="245" width="50" height="150" fill="#64748b" />
+  <rect x="500" y="245" width="50" height="150" fill="#64748b" />
+  <!-- Inspection Safe Badge -->
+  <rect x="20" y="20" width="410" height="75" rx="10" fill="#15803de6" stroke="#86efac" stroke-width="2" />
+  <text x="40" y="50" font-family="Arial, sans-serif" font-weight="bold" font-size="18" fill="#ffffff">NH-15 JIA BHORELI BRIDGE</text>
+  <text x="40" y="75" font-family="Arial, sans-serif" font-size="13" fill="#dcfce7">Inspection Cleared | Debris Cleared from Piers | Passable</text>
+</svg>

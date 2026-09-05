@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
+  <!-- Sky -->
+  <rect width="800" height="500" fill="#64748b" />
+  
+  <!-- Valley Hillside -->
+  <polygon points="0,200 800,100 800,500 0,500" fill="#1e293b" />
+
+  <!-- Roadway -->
+  <polygon points="0,320 800,280 800,450 0,490" fill="#334155" />
+
+  <!-- Road Subsidence / Cave-in on Left Half -->
+  <path d="M 150,310 Q 320,380 450,300 L 480,430 Q 300,470 120,440 Z" fill="#451a03" />
+  <line x1="160" y1="315" x2="220" y2="350" stroke="#f87171" stroke-width="4" />
+  <line x1="220" y1="350" x2="280" y2="340" stroke="#f87171" stroke-width="4" />
+  <line x1="280" y1="340" x2="340" y2="390" stroke="#f87171" stroke-width="4" />
+  <line x1="340" y1="390" x2="420" y2="320" stroke="#f87171" stroke-width="4" />
+
+  <!-- Danger Tape -->
+  <line x1="100" y1="300" x2="480" y2="290" stroke="#facc15" stroke-width="6" stroke-dasharray="15,10" />
+
+  <!-- Banner -->
+  <rect x="20" y="20" width="410" height="75" rx="10" fill="#b91c1ce6" stroke="#fca5a5" stroke-width="2" />
+  <text x="40" y="50" font-family="Arial, sans-serif" font-weight="bold" font-size="18" fill="#ffffff">NH-29 ROAD BED SUBSIDENCE</text>
+  <text x="40" y="75" font-family="Arial, sans-serif" font-size="13" fill="#fee2e2">Hill Slope Erosion | One-Way Single Lane Control</text>
+</svg>
