@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>AapdaMarg NE - North East India Disaster-Adaptive Route & Hazard Intelligence</title>
+    
+    <!-- Leaflet GIS Map Library -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- PWA Web App Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AapdaMarg NE">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/854/854878.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="https://cdn-icons-png.flaticon.com/512/854/854878.png">
+
+    <!-- Custom Command Center Styling -->
+    <link rel="stylesheet" href="/css/style.css?v=4.1">
+    
+    <script>
+        function handleApkDownload(e) {
+            const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            if (isIos) {
+                if (e) e.preventDefault();
+                openIosInstallModal();
+                return false;
+            }
+            return true;
+        }
+
+        function openIosInstallModal() {
+            const m = document.getElementById('iosInstallModal');
+            if (m) {
+                m.classList.add('active');
+                m.style.display = 'flex';
+                m.style.opacity = '1';
+                m.style.pointerEvents = 'auto';
+                m.style.visibility = 'visible';
+            }
+        }
+
+        function closeIosInstallModal(e) {
+            if (e && e.target && e.target.closest('.modal-card') && !e.target.classList.contains('modal-close')) {
+                return;
+            }
+            const m = document.getElementById('iosInstallModal');
+            if (m) {
+                m.classList.remove('active');
+                m.style.display = 'none';
+                m.style.opacity = '0';
+                m.style.pointerEvents = 'none';
+            }
+        }
+
+        function openMobileMenuModal() {
+            const m = document.getElementById('mobileMenuModal');
+            if (m) {
+                m.classList.add('active');
+                m.style.display = 'flex';
+                m.style.opacity = '1';
+                m.style.pointerEvents = 'auto';
+                m.style.visibility = 'visible';
+            }
+        }
+        function closeMobileMenuModal(e) {
+            if (e && e.target && e.target.closest('.mobile-menu-sheet') && !e.target.classList.contains('modal-close')) {
+                return;
+            }
+            const m = document.getElementById('mobileMenuModal');
+            if (m) {
+                m.classList.remove('active');
+                m.style.display = 'none';
+                m.style.opacity = '0';
+                m.style.pointerEvents = 'none';
+            }
+        }
+
+        function hideGpsHud() {
+            const hud = document.getElementById('gpsHudBar');
+            if (hud) {
+                hud.classList.add('hidden');
+                hud.style.setProperty('display', 'none', 'important');
+            }
+            const locateBtn = document.querySelector('.btn-locate-me');
+            if (locateBtn && window.innerWidth <= 768) {
+                locateBtn.style.setProperty('bottom', '75px', 'important');
+            }
+        }
+        function showGpsHud() {
+            const hud = document.getElementById('gpsHudBar');
+            if (hud) {
+                hud.classList.remove('hidden');
+                hud.style.removeProperty('display');
+                if (window.innerWidth <= 768) {
+                    hud.style.setProperty('display', 'grid', 'important');
+                } else {
+                    hud.style.setProperty('display', 'flex', 'important');
+                }
+            }
+            const locateBtn = document.querySelector('.btn-locate-me');
+            if (locateBtn && window.innerWidth <= 768) {
+                locateBtn.style.setProperty('bottom', '145px', 'important');
+            }
+        }
+        function closeGpsHud() {
+            if (typeof toggleGpsTracking === 'function' && typeof isGpsActive !== 'undefined' && isGpsActive) {
+                toggleGpsTracking();
+            } else if (typeof stopDriveSimulator === 'function' && typeof isSimulating !== 'undefined' && isSimulating) {
+                stopDriveSimulator();
+                hideGpsHud();
+            } else {
+                hideGpsHud();
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <!-- Header Navigation & Early Warning Ticker -->
+    <header class="app-header">
+        <div class="header-top-row">
+            <div class="brand-badge">
+                <div class="brand-icon">⛰️</div>
+                <div class="brand-text">
+                    <h1>AapdaMarg NE</h1>
+                    <p class="brand-subtext">North East Disaster Resilience & Safe Route Navigation System</p>
+                </div>
+            </div>
+
+            <!-- Header Action Buttons -->
+            <div class="header-actions">
+                <button id="btnHeaderSos" class="btn btn-sos" onclick="triggerInstantAutoSos()" title="Instant Distress Alert to Nearest Police & Hospital">
+                    <span class="sos-full-label">🚨 SOS Dispatch</span>
+                    <span class="sos-mobile-label">🚨 SOS</span>
+                </button>
+                <button id="btnHeaderDashboard" class="btn btn-secondary btn-desktop-only" onclick="openCommandDashboard()" style="background: linear-gradient(135deg, #0284c7, #2563eb); color: white;" title="Centralized Disaster Logistics Command Dashboard">
+                    📊 Central Dashboard
+                </button>
+                <button id="btnHeaderSitrep" class="btn btn-secondary btn-desktop-only" onclick="openSitrepModal()" style="border-color: #0284c7; color: #0284c7;" title="Field Officer Verified Situation Report">
+                    📋 Officer SITREP
+                </button>
+                <button id="btnToggleGps" class="btn btn-secondary btn-desktop-only" onclick="toggleGpsTracking()" title="Start real-time device GPS tracking">
+                    📍 Live GPS
+                </button>
+                <button id="btnDriveSim" class="btn btn-secondary btn-desktop-only" onclick="toggleDriveSimulator()" title="Simulate driving along active highway route">
+                    🚗 Simulate Drive
+                </button>
+                <button id="btnHeaderReport" class="btn btn-report btn-desktop-only" onclick="openReportModal()">
+                    📷 Report Hazard
+                </button>
+                <button id="btnHeaderCamps" class="btn btn-secondary btn-desktop-only" onclick="openEmergencyModal()">
+                    🏥 Camps
+                </button>
+                <!-- Map Layers & Legend Dropdown Menu -->
+                <div class="map-dropdown-container" id="mapDropdownContainer">
+                    <button type="button" class="btn btn-secondary btn-desktop-only" id="btnMapDropdown" onclick="toggleMapLayersMenu(event)" title="Map Layers, Basemaps & Legend">
+                        <span>🗺️ Layers</span>
+                        <span id="mapDropdownArrow" style="font-size: 9px; margin-left: 2px; opacity: 0.8;">▾</span>
+                    </button>
+
+                    <!-- Dropdown Card -->
+                    <div class="map-dropdown-panel" id="mapDropdownPanel" onclick="event.stopPropagation()">
+                        <div class="map-dropdown-tabs">
+                            <div class="map-tab-btn active" id="tabBtnLayers" onclick="switchMapMenuTab('layers')">
+                                🗂️ Map Layers
+                            </div>
+                            <div class="map-tab-btn" id="tabBtnLegend" onclick="switchMapMenuTab('legend')">
+                                📖 Legend
+                            </div>
+                            <button type="button" class="map-dropdown-close" onclick="closeMapLayersMenu()">&times;</button>
+                        </div>
+
+                        <!-- Panel 1: Layers & Basemap -->
+                        <div class="map-panel-content" id="mapPanelLayers">
+                            <!-- Base Map Section -->
+                            <div class="map-menu-section">
+                                <div class="map-menu-heading">🗺️ Base Map Style</div>
+                                <div class="basemap-pills">
+                                    <label class="basemap-pill">
+                                        <input type="radio" name="baseMap" value="Standard Street" checked onchange="switchBaseMap(this.value)">
+                                        <span>Street</span>
+                                    </label>
+                                    <label class="basemap-pill">
+                                        <input type="radio" name="baseMap" value="Terrain & Contours" onchange="switchBaseMap(this.value)">
+                                        <span>Terrain</span>
+                                    </label>
+                                    <label class="basemap-pill">
+                                        <input type="radio" name="baseMap" value="Satellite Imagery" onchange="switchBaseMap(this.value)">
+                                        <span>Satellite</span>
+                                    </label>
+                                    <label class="basemap-pill">
+                                        <input type="radio" name="baseMap" value="Dark Navigation" onchange="switchBaseMap(this.value)">
+                                        <span>Dark Nav</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Hazards Section -->
+                            <div class="map-menu-section">
+                                <div class="map-menu-heading">⚠️ Disaster Hazards</div>
+                                <label class="layer-checkbox">
+                                    <input type="checkbox" checked onchange="toggleOverlayLayer('hazards', this.checked)">
+                                    <span>⛰️ Active Hazards & Slides</span>
+                                </label>
+                                <label class="layer-checkbox">
+                                    <input type="checkbox" checked onchange="toggleOverlayLayer('riskZones', this.checked)">
+                                    <span>🌊 High-Risk Flood Basins</span>
+                                </label>
+                                <label class="layer-checkbox">
+                                    <input type="checkbox" checked onchange="toggleOverlayLayer('routes', this.checked)">
+                                    <span>🧭 Evaluated Routes</span>
+                                </label>
+                            </div>
+
+                            <!-- Emergency Amenities & Fleet Section -->
+                            <div class="map-menu-section">
+                                <div class="map-menu-heading">🚨 Emergency & Amenities</div>
+                                <label class="layer-checkbox">
+                                    <input type="checkbox" checked onchange="toggleEmergencyFacilityLayer(this.checked)">
+                                    <span>🚔 Police & 🏥 Hospitals</span>
+                                </label>
+                                <label class="layer-checkbox">
+                                    <input type="checkbox" checked onchange="toggleAmenityLayer('fuel', this.checked)">
+                                    <span>⛽ Petrol Pumps & Fuel</span>
+                                </label>
+                                <label class="layer-checkbox">
+                                    <input type="checkbox" checked onchange="toggleAmenityLayer('hotel', this.checked)">
+                                    <span>🏨 Safe Hotels & Lodging</span>
+                                </label>
+                                <label class="layer-checkbox">
+                                    <input type="checkbox" checked onchange="toggleAmenityLayer('restaurant', this.checked)">
+                                    <span>🍽️ Food Hubs & Dhabas</span>
+                                </label>
+                                <label class="layer-checkbox">
+                                    <input type="checkbox" checked onchange="toggleOverlayLayer('fleet', this.checked)">
+                                    <span>🚚 Essential Convoys (GPS)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Panel 2: Legend -->
+                        <div class="map-panel-content" id="mapPanelLegend" style="display: none;">
+                            <div class="legend-scroll-area">
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background: #10b981; box-shadow: 0 0 6px #10b981;"></div>
+                                    <span>Safest Recommended Route</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background: #ef4444; border: 1px dashed white;"></div>
+                                    <span>Direct / Dangerous Route</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span>🚔</span>
+                                    <span>Police Station (Alert Ready)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span>🏥</span>
+                                    <span>Hospital / 108 Ambulance</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span>🆘</span>
+                                    <span>Active SOS Distress Scene</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span>⛰️</span>
+                                    <span>Active Landslide / Mudflow</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span>🌊</span>
+                                    <span>Submerged / Waterlogged</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span>🌉</span>
+                                    <span>Damaged / Weak Bridge</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span>⛽</span>
+                                    <span>Fuel Station (Reserves Tracked)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span>🏨</span>
+                                    <span>Safe Lodging / Transit Shelter</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span>🍽️</span>
+                                    <span>Food Hub / Langar Kitchen</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span>🚚</span>
+                                    <span>Live Supply Convoy (GPS)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Settings Menu -->
+                <div class="user-role-badge-container">
+                    <button class="btn btn-secondary btn-settings-trigger" id="btnUserRoleBadge" onclick="toggleRoleMenu(event)" title="Settings">
+                        <span class="settings-gear-icon">⚙️</span>
+                        <span class="settings-text">Settings</span>
+                        <span class="role-arrow">▾</span>
+                    </button>
+                    <div class="role-dropdown-menu" id="roleDropdownMenu">
+                        <div class="role-dropdown-header">
+                            <div style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">⚙️ SETTINGS</div>
+                            <div style="font-size: 12px; font-weight: 800; color: #0f172a; margin-top: 2px;" id="menuCurrentRoleName">💼 Headquarters Employee</div>
+                        </div>
+                        <div class="role-dropdown-divider"></div>
+                        <button class="role-dropdown-item" id="menuLoginHqBtn" onclick="openLoginForRole('headquarters')">
+                            <span class="role-item-icon">💼</span>
+                            <div class="role-item-info">
+                                <div class="role-item-title">Login as Headquarters Employee</div>
+                                <div class="role-item-sub">Fleet tracking & logistics management</div>
+                            </div>
+                        </button>
+                        <button class="role-dropdown-item" id="menuLoginOfficerBtn" onclick="openLoginForRole('field_officer')">
+                            <span class="role-item-icon">⭐</span>
+                            <div class="role-item-info">
+                                <div class="role-item-title">Login as Field Officer</div>
+                                <div class="role-item-sub">NDRF / SDRF / Police field SITREPs</div>
+                            </div>
+                        </button>
+                        <div class="role-dropdown-divider" id="menuOfficerProfileDivider" style="display: none;"></div>
+                        <button class="role-dropdown-item" id="menuOfficerProfileBtn" onclick="openOfficerProfileModal()" style="display: none; color: #0d9488;">
+                            <span class="role-item-icon">⭐</span>
+                            <div class="role-item-info">
+                                <div class="role-item-title" style="color: #0f766e; font-weight: 700;">Officer Deployment Profile</div>
+                                <div class="role-item-sub" id="menuOfficerProfileSub">Major R. Sangma • BRO (East Jaintia Hills)</div>
+                            </div>
+                        </button>
+                        <div class="role-dropdown-divider"></div>
+                        <button class="role-dropdown-item" id="menuGuestBtn" onclick="selectRole('general_public')">
+                            <span class="role-item-icon">👤</span>
+                            <div class="role-item-info">
+                                <div class="role-item-title">Continue as Guest / Citizen</div>
+                                <div class="role-item-sub">Safe disaster navigation & SOS (No password)</div>
+                            </div>
+                        </button>
+                        <div class="role-dropdown-divider" id="menuSignoutDivider"></div>
+                        <button class="role-dropdown-item btn-signout-item" id="menuSignoutBtn" onclick="handleSignOut()" style="color: #dc2626;">
+                            <span class="role-item-icon">↩️</span>
+                            <div class="role-item-info">
+                                <div class="role-item-title" style="color: #dc2626; font-weight: 700;">Sign Out</div>
+                                <div class="role-item-sub">Return to Guest baseline</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mobile Actions Menu Trigger -->
+                <button class="btn btn-mobile-menu" id="btnHeaderTools" onclick="openMobileMenuModal()" ontouchend="openMobileMenuModal()" title="Open Quick Actions">
+                    ⚡ Tools
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Command Center Grid -->
+    <div class="main-viewport">
+
+        <!-- Left Drawer / Navigation & Telemetry Sidebar -->
+        <aside class="sidebar" id="sidebarDrawer">
+            <!-- Mobile Drawer Header -->
+            <div class="mobile-drawer-bar">
+                <div class="drawer-drag-pill"></div>
+                <div class="drawer-bar-row">
+                    <button type="button" id="btnMobileDrawerBack" class="btn btn-secondary" onclick="switchSidebarTab('tabRoute')" style="display: none; font-size: 11.5px; padding: 4px 10px; font-weight: 700; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #0f172a; cursor: pointer; align-items: center; gap: 4px;">
+                        ← Back
+                    </button>
+                    <span class="drawer-title" id="drawerTitleText">🧭 Route & Safety Control</span>
+                    <button type="button" class="btn-drawer-close" onclick="closeMobileDrawer()">✕ View Map</button>
+                </div>
+            </div>
+
+            <div class="sidebar-tab-nav" style="overflow-x: auto;">
+                <div class="sidebar-tab active" data-tab="tabRoute">
+                    🧭 Routes
+                </div>
+                <div class="sidebar-tab" data-tab="tabSos" style="color: #f87171; font-weight: 700;">
+                    🚨 SOS
+                </div>
+                <div class="sidebar-tab" data-tab="tabFleet">
+                    🚚 Fleet GPS
+                </div>
+                <div class="sidebar-tab" data-tab="tabWeather">
+                    🌧️ Weather
+                </div>
+                <div class="sidebar-tab" data-tab="tabFeed">
+                    📢 Citizen
+                </div>
+                <div class="sidebar-tab" data-tab="tabSitrep">
+                    📋 SITREPs
+                </div>
+            </div>
+
+            <!-- Tab 1: Route Planner & Risk Analysis -->
+            <div id="tabRoute" class="tab-content" style="display: flex;">
+                
+                <div class="route-box">
+                    <div class="form-group">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <label for="originSelect" style="margin-bottom: 0;">Origin (Start Point)</label>
+                            <a href="javascript:void(0)" onclick="useGpsAsOrigin()" style="color: #38bdf8; font-size: 11px; text-decoration: none; font-weight: 700;">
+                                📍 Use My Live GPS
+                            </a>
+                        </div>
+                        <select id="originSelect" class="form-control" onchange="handleLocationSelectChange()">
+                            <option value="">Loading locations...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="destSelect">Destination</label>
+                        <select id="destSelect" class="form-control" onchange="handleLocationSelectChange()">
+                            <option value="">Loading locations...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Vehicle Capability Profile</label>
+                        <div class="vehicle-selector">
+                            <div class="vehicle-btn active" onclick="selectVehicle('standard', this)">
+                                <span>🚗</span> Car / Sedan
+                            </div>
+                            <div class="vehicle-btn" onclick="selectVehicle('4x4', this)">
+                                <span>🚙</span> 4x4 / SUV
+                            </div>
+                            <div class="vehicle-btn" onclick="selectVehicle('emergency_convoy', this)">
+                                <span>🚛</span> NDRF Truck
+                            </div>
+                            <div class="vehicle-btn" onclick="selectVehicle('foot', this)">
+                                <span>🥾</span> Foot Patrol
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="btnCalculate" class="btn-calculate" onclick="calculateRoute()">
+                        🧭 Calculate Safe Route
+                    </button>
+                </div>
+
+                <!-- Dynamic Route Comparison Cards Container -->
+                <div id="routeResultsContainer">
+                    <div style="text-align: center; color: #94a3b8; padding: 20px; font-size: 13px;">
+                        Select origin and destination to evaluate hazard risk and generate disaster-avoiding paths.
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Tab: Emergency Complaint & Automated SOS Dispatch -->
+            <div id="tabSos" class="tab-content" style="display: none;">
+                <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 12px; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" class="btn btn-secondary btn-tab-back" onclick="switchSidebarTab('tabRoute')" style="font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; border: 1px solid #fca5a5; background: #ffffff; color: #dc2626; display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="Back to Route Planner">
+                                <span>←</span> Back
+                            </button>
+                            <div>
+                                <h3 style="font-size: 13px; font-weight: 800; color: #dc2626; margin: 0;">🚨 Emergency SOS Dispatch</h3>
+                                <p style="font-size: 10.5px; color: #991b1b; margin: 0;">Automatic GPS detection & alert to nearest Police & Hospital.</p>
+                            </div>
+                        </div>
+                        <button onclick="openEmergencyComplaintModal()" style="background: #ffffff; color: #334155; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 10.5px; font-weight: 600; cursor: pointer; white-space: nowrap;">
+                            📝 Form
+                        </button>
+                    </div>
+
+                    <button onclick="triggerInstantAutoSos()" class="btn-instant-transmit" style="padding: 10px; font-size: 12px;">
+                        ⚡ 1-TOUCH INSTANT SOS (AUTO-GPS)
+                    </button>
+                </div>
+
+                <div style="margin-top: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <h4 style="font-size: 11.5px; font-weight: 700; color: #0f172a; text-transform: uppercase;">Active Distress Calls</h4>
+                        <span style="font-size: 10px; color: #64748b;">Auto Alert Dispatched</span>
+                    </div>
+                    <div id="sosListContainer">Loading emergency complaints...</div>
+                </div>
+            </div>
+
+            <!-- Tab 2: Regional Weather & Flood Telemetry -->
+            <div id="tabWeather" class="tab-content" style="display: none;">
+                <div style="background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                        <button type="button" class="btn btn-secondary btn-tab-back" onclick="switchSidebarTab('tabRoute')" style="font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="Back to Route Planner">
+                            <span>←</span> Back
+                        </button>
+                        <h3 style="font-size: 12.5px; font-weight: 700; color: #0284c7; margin: 0;">North East Flood & Rain Monitoring</h3>
+                    </div>
+                    <p style="font-size: 11px; color: #64748b; margin: 0;">Real-time precipitation telemetry combined with IMD & ASDMA Brahmaputra basin hydro-meters.</p>
+                </div>
+                <div id="weatherListContainer">
+                    <div style="text-align: center; color: #64748b; padding: 20px;">Fetching weather telemetry...</div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Citizen Incident & Photo Feed -->
+            <div id="tabFeed" class="tab-content" style="display: none;">
+                <div class="tab-header-strip" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0 10px 0; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button type="button" class="btn btn-secondary btn-tab-back" onclick="switchSidebarTab('tabRoute')" style="font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; transition: all 0.2s ease;" title="Back to Route Planner">
+                            <span>←</span> Back
+                        </button>
+                        <span style="font-size: 13px; font-weight: 800; color: #0f172a;">Live Crowdsourced Incidents</span>
+                    </div>
+                    <button onclick="openReportModal()" style="background: #0284c7; color: white; border: none; border-radius: 6px; padding: 5px 12px; font-size: 11.5px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                        + Upload
+                    </button>
+                </div>
+                <div id="communityFeedContainer">
+                    <div style="text-align: center; color: #64748b; padding: 20px;">Loading community reports...</div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Essential Commodity Fleet GPS Tracking -->
+            <div id="tabFleet" class="tab-content" style="display: none;">
+                <div style="background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" class="btn btn-secondary btn-tab-back" onclick="switchSidebarTab('tabRoute')" style="font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="Back to Route Planner">
+                                <span>←</span> Back
+                            </button>
+                            <h3 style="font-size: 12.5px; font-weight: 700; color: #0284c7; margin: 0;">Essential Fleet Tracking</h3>
+                        </div>
+                        <button onclick="openCommandDashboard()" style="background: #0284c7; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 10.5px; font-weight: bold; cursor: pointer; white-space: nowrap;">
+                            📊 Executive Dashboard
+                        </button>
+                    </div>
+                    <p style="font-size: 11px; color: #64748b; margin-top: 6px;">Real-time GPS movement of medicine, ration, bridge construction, and fuel convoys across North East corridors.</p>
+                </div>
+
+                <div style="margin-top: 8px;">
+                    <h4 style="font-size: 11.5px; font-weight: 700; color: #dc2626; text-transform: uppercase; margin-bottom: 6px;">Automated Corridor Alerts</h4>
+                    <div id="logisticsAlertsContainer">Loading alerts...</div>
+                </div>
+
+                <div style="margin-top: 10px;">
+                    <h4 style="font-size: 11.5px; font-weight: 700; color: #0284c7; text-transform: uppercase; margin-bottom: 6px;">Live Convoys in Transit</h4>
+                    <div id="fleetListContainer">Loading convoys...</div>
+                </div>
+            </div>
+
+            <!-- Tab 5: Field Official Verified SITREPs -->
+            <div id="tabSitrep" class="tab-content" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button type="button" class="btn btn-secondary btn-tab-back" onclick="switchSidebarTab('tabRoute')" style="font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="Back to Route Planner">
+                            <span>←</span> Back
+                        </button>
+                        <div>
+                            <h3 style="font-size: 12.5px; font-weight: 700; color: #0284c7; margin: 0;">Authority SITREPs</h3>
+                            <p style="font-size: 10.5px; color: #64748b; margin: 0;">Verified situation reports by NDRF, BRO, SDRF & PWD.</p>
+                        </div>
+                    </div>
+                    <button onclick="openSitrepModal()" style="background: #0284c7; color: white; border: none; border-radius: 6px; padding: 5px 10px; font-size: 11px; font-weight: bold; cursor: pointer; white-space: nowrap;">
+                        + New SITREP
+                    </button>
+                </div>
+                <div id="sitrepListContainer" style="margin-top: 10px;">
+                    Loading verified SITREPs...
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- Main Map Area -->
+        <main class="map-container">
+            <div id="map"></div>
+
+            <!-- Floating Real-Time GPS Telemetry HUD (Linked to Live GPS button) -->
+            <div id="gpsHudBar" class="gps-hud-bar hidden" style="display: none !important;">
+                <button type="button" class="btn-hud-close" onclick="closeGpsHud()" ontouchend="closeGpsHud()" title="Turn off Live GPS">&times;</button>
+                <div class="gps-hud-item">
+                    <span class="gps-hud-label">GPS STATUS</span>
+                    <span class="gps-hud-value" id="hudGpsStatus">Tracking</span>
+                </div>
+                <div class="gps-hud-item">
+                    <span class="gps-hud-label">COORDINATES</span>
+                    <span class="gps-hud-value" id="hudCoords">26.144, 91.736</span>
+                </div>
+                <div class="gps-hud-item">
+                    <span class="gps-hud-label">SPEED</span>
+                    <span class="gps-hud-value" id="hudSpeed">0 km/h</span>
+                </div>
+                <div class="gps-hud-item">
+                    <span class="gps-hud-label">ALTITUDE</span>
+                    <span class="gps-hud-value" id="hudAltitude">--</span>
+                </div>
+                <div class="gps-hud-item">
+                    <span class="gps-hud-label">ACCURACY</span>
+                    <span class="gps-hud-value" id="hudAccuracy">±15m</span>
+                </div>
+                <div class="gps-hud-item">
+                    <span class="gps-hud-label">PROXIMITY THREAT</span>
+                    <span class="gps-hud-value safe" id="hudThreatAlert">✅ Safe</span>
+                </div>
+            </div>
+
+            <!-- Hazard Proximity Warning Banner -->
+            <div id="hazardProximityBanner" class="hazard-proximity-banner">
+                <div style="font-size: 26px;">🚨</div>
+                <div id="hazardBannerText" style="font-size: 12.5px; line-height: 1.4;">
+                    Hazard Proximity Alert: You are near an active disaster zone!
+                </div>
+            </div>
+
+            <!-- Floating Headquarters Fleet Logistics Radar Banner -->
+            <div id="hqFleetRadarBanner" class="role-floating-banner banner-hq">
+                <div class="banner-info">
+                    <span style="font-size: 18px;">💼</span>
+                    <div>
+                        <div class="banner-title" style="color: #0284c7;">
+                            SEOC LOGISTICS COMMAND RADAR
+                            <span style="font-size: 10px; background: rgba(2, 132, 199, 0.15); color: #0284c7; padding: 2px 6px; border-radius: 4px; font-weight: 700;">6 CONVOYS ACTIVE</span>
+                        </div>
+                        <div style="font-size: 11px; color: #475569; margin-top: 2px;">
+                            • Meds (FL-01) • Grains (FL-02 ⚠️ Delayed) • Bridge Parts (FL-03) • Fuel (FL-04)
+                        </div>
+                    </div>
+                </div>
+                <div class="banner-actions">
+                    <button id="btnHqAutoReroute" class="btn-banner-action btn-banner-primary" onclick="hqAutoRerouteAll()" title="Reroute delayed convoys along safe alternate highway corridors">
+                        Auto-Reroute Fleet
+                    </button>
+                    <button class="btn-banner-action" onclick="openCommandDashboard()" title="Open Central Logistics Command Dashboard">
+                        Central Dashboard
+                    </button>
+                    <button class="btn-banner-close" onclick="dismissHqBanner()" title="Hide Radar Banner" aria-label="Hide Banner">✕</button>
+                </div>
+            </div>
+            <button id="btnRestoreHqBanner" class="btn-restore-banner" onclick="restoreHqBanner()" title="Show SEOC Logistics Radar Banner">
+                <span>💼</span>
+                <span>Show Logistics Radar</span>
+            </button>
+
+            <!-- Floating Field Officer Tactical Console Banner -->
+            <div id="officerTacticalBanner" class="role-floating-banner banner-officer">
+                <div class="banner-info">
+                    <span style="font-size: 18px;">⭐</span>
+                    <div>
+                        <div class="banner-title" style="color: #0d9488;">
+                            FIELD OFFICER TACTICAL CONSOLE
+                            <span style="font-size: 10px; background: rgba(13, 148, 136, 0.15); color: #0f766e; padding: 2px 6px; border-radius: 4px; font-weight: 700;">NDRF • SDRF • POLICE</span>
+                        </div>
+                        <div id="officerBannerSubtitle" style="font-size: 11px; color: #475569; margin-top: 2px;">
+                            Verified Incidents Feed • Bridge Structural Damage Ratings • 108 CAD Response Ready
+                        </div>
+                    </div>
+                </div>
+                <div class="banner-actions">
+                    <button class="btn-banner-action btn-banner-primary" onclick="openSitrepModal()" style="background: #0d9488; border-color: #2dd4bf;" title="Submit Field Officer Verified Situation Report">
+                        📋 Submit SITREP
+                    </button>
+                    <button id="btnOfficerBannerReport" class="btn-banner-action" onclick="openReportModal()" title="Upload Geotagged Hazard Photo">
+                        📷 Report Hazard
+                    </button>
+                    <button class="btn-banner-close" onclick="dismissOfficerBanner()" title="Hide Tactical Console Banner" aria-label="Hide Banner">✕</button>
+                </div>
+            </div>
+            <button id="btnRestoreOfficerBanner" class="btn-restore-banner" onclick="restoreOfficerBanner()" title="Show Tactical Console Banner">
+                <span>⭐</span>
+                <span>Show Tactical Console</span>
+            </button>
+
+            <!-- Floating Locate Me Button -->
+            <button class="btn-locate-me" onclick="centerOnUserGps()" title="Center map on my live GPS position">
+                🎯
+            </button>
+
+            <!-- Floating Mobile Route Peek Card -->
+            <div id="mobileRoutePeekCard" class="mobile-route-peek-card" onclick="switchMobileView('tabRoute')">
+                <div class="route-peek-status">
+                    <span class="route-peek-badge">🟢 SAFEST ROUTE ACTIVE</span>
+                    <span class="route-peek-arrow">View Details ▴</span>
+                </div>
+                <div class="route-peek-info" id="routePeekText">
+                    Guwahati ➔ Silchar: 405 km • 21.6% Risk (Avoids Sonapur Mudslide)
+                </div>
+            </div>
+        </main>
+
+    </div>
+
+    <!-- Mobile Drawer Dark Backdrop -->
+    <div id="mobileDrawerBackdrop" class="mobile-drawer-backdrop" onclick="closeMobileDrawer()"></div>
+
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav class="mobile-bottom-nav" id="mobileBottomNav">
+        <button class="m-nav-item active" id="mNavMap" onclick="switchMobileView('map')">
+            <span class="m-nav-icon">🗺️</span>
+            <span class="m-nav-text">Map</span>
+        </button>
+        <button class="m-nav-item" id="mNavRoute" onclick="switchMobileView('tabRoute')">
+            <span class="m-nav-icon">🧭</span>
+            <span class="m-nav-text">Route</span>
+        </button>
+        <button class="m-nav-item m-nav-sos" onclick="triggerInstantAutoSos()" title="Emergency Distress SOS">
+            <span class="m-nav-icon">🚨</span>
+            <span class="m-nav-text">SOS</span>
+        </button>
+        <button class="m-nav-item" id="mNavFleet" onclick="switchMobileView('tabFleet')">
+            <span class="m-nav-icon">🚚</span>
+            <span class="m-nav-text">Fleet</span>
+        </button>
+        <button class="m-nav-item" id="mNavMore" onclick="openMobileMenuModal()" ontouchend="openMobileMenuModal()">
+            <span class="m-nav-icon">⚡</span>
+            <span class="m-nav-text">Actions</span>
+        </button>
+    </nav>
+
+    <!-- Master Role & Multi-Persona Login Gateway Modal -->
+    <div id="loginModal" class="login-modal-overlay" onclick="closeLoginModal(event)">
+        <div class="login-modal-card" onclick="event.stopPropagation()">
+            <div class="login-modal-header">
+                <button type="button" class="modal-close" style="position: absolute; top: 16px; right: 20px;" onclick="closeLoginModal()">&times;</button>
+                <div class="brand-pill">📍 AapdaMarg NE • Secure Gateway</div>
+                <h2 class="login-modal-title">Account Login</h2>
+                <p class="login-modal-sub">
+                    Sign in with your official ID or phone number to access your operational role.
+                </p>
+            </div>
+
+            <div class="login-modal-body">
+                <!-- Role Selector Tabs -->
+                <div class="auth-role-tabs">
+                    <button type="button" class="auth-role-tab active" id="authTabHq" onclick="setLoginRole('headquarters')">
+                        <span class="auth-tab-icon">💼</span>
+                        <span>HQ Employee</span>
+                    </button>
+                    <button type="button" class="auth-role-tab" id="authTabOfficer" onclick="setLoginRole('field_officer')">
+                        <span class="auth-tab-icon">⭐</span>
+                        <span>Field Officer</span>
+                    </button>
+                    <button type="button" class="auth-role-tab" id="authTabPublic" onclick="setLoginRole('general_public')">
+                        <span class="auth-tab-icon">👤</span>
+                        <span>Citizen / Guest</span>
+                    </button>
+                </div>
+
+                <!-- Unified Login Form -->
+                <form id="loginForm" onsubmit="return handleAuthLogin(event)">
+                    <!-- Notification Banner for Invalid Credentials -->
+                    <div id="loginAuthNotice" class="login-auth-notice" style="display: none; padding: 10px 14px; margin-bottom: 14px; border-radius: 8px; font-size: 12px; font-weight: 600; background: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; align-items: center; gap: 8px;">
+                        <span style="font-size: 15px;">⚠️</span>
+                        <span id="loginAuthNoticeText">Invalid credentials! Please check your ID and password.</span>
+                    </div>
+
+                    <!-- Identifier Input (ID or Phone Number) -->
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label class="login-label" for="loginIdentifier">
+                            <span>ID or Phone Number</span>
+                            <span class="auth-badge-role" id="authRoleLabel">Headquarters Employee</span>
+                        </label>
+                        <div class="login-input-wrap">
+                            <span class="login-input-icon">👤</span>
+                            <input type="text" id="loginIdentifier" class="login-input" placeholder="Enter Authorized Phone Number / ID" required autocomplete="username" oninput="hideLoginNotice()">
+                        </div>
+                    </div>
+
+                    <!-- Password Input -->
+                    <div class="form-group" style="margin-bottom: 14px;" id="loginPasswordGroup">
+                        <label class="login-label" for="loginPassword" style="margin-bottom: 6px;">Password</label>
+                        <div class="login-input-wrap">
+                            <span class="login-input-icon">🔒</span>
+                            <input type="password" id="loginPassword" class="login-input" placeholder="Enter password" required autocomplete="current-password" oninput="hideLoginNotice()">
+                            <button type="button" class="btn-toggle-pwd" onclick="togglePasswordVisibility()" title="Show/Hide Password">👁️</button>
+                        </div>
+                    </div>
+
+                    <!-- Session & Demo Helper -->
+                    <div class="auth-sub-row">
+                        <label class="auth-remember">
+                            <input type="checkbox" id="loginRemember" checked>
+                            <span>Remember session</span>
+                        </label>
+                        <span class="auth-demo-hint" id="authDemoHint">Authorized personnel only</span>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" class="btn-auth-submit" id="btnLoginSubmit">
+                        <span id="btnLoginSubmitText">Sign In to Headquarters</span> ➔
+                    </button>
+                </form>
+
+                <!-- Divider & Guest Access -->
+                <div class="auth-divider">
+                    <span>OR</span>
+                </div>
+
+                <button type="button" class="btn-guest-access" onclick="selectRole('general_public')">
+                    👤 Continue as Guest / Citizen (No Password Required)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Field Officer Deployment Profile (Triggered after officer login) -->
+    <div id="officerProfileModal" class="login-modal-overlay" onclick="closeOfficerProfileModal(event)">
+        <div class="login-modal-card" style="max-width: 480px;" onclick="event.stopPropagation()">
+            <div class="login-modal-header" style="background: linear-gradient(135deg, #f0fdfa, #f8fafc); border-bottom: 1px solid #99f6e4;">
+                <button type="button" class="modal-close" style="position: absolute; top: 16px; right: 20px;" onclick="closeOfficerProfileModal()">&times;</button>
+                <div class="brand-pill" style="background: #ccfbf1; color: #0f766e; border-color: #99f6e4;">
+                    ⭐ Field Officer Deployment Verification
+                </div>
+                <h2 class="login-modal-title" style="color: #0f766e; font-size: 1.35rem;">Officer Deployment Profile</h2>
+                <p class="login-modal-sub">
+                    Confirm your operational deployment details for verified SITREPs and CAD field response.
+                </p>
+            </div>
+
+            <div class="login-modal-body" style="padding: 20px;">
+                <form id="officerProfileForm" onsubmit="return handleSaveOfficerProfile(event)">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="login-label" for="officerProfName" style="font-weight: 700; color: #334155; font-size: 11px;">
+                                REPORTING OFFICER NAME
+                            </label>
+                            <input type="text" id="officerProfName" class="form-control" placeholder="e.g. Major R. Sangma" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="login-label" for="officerProfRank" style="font-weight: 700; color: #334155; font-size: 11px;">
+                                RANK / DESIGNATION
+                            </label>
+                            <input type="text" id="officerProfRank" class="form-control" placeholder="e.g. Officer Commanding" required>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="login-label" for="officerProfAgency" style="font-weight: 700; color: #334155; font-size: 11px;">
+                                DEPLOYING AGENCY
+                            </label>
+                            <select id="officerProfAgency" class="form-control" style="height: 42px; background: #ffffff;" required>
+                                <option value="Border Roads Organisation (BRO)">Border Roads Organisation (BRO)</option>
+                                <option value="National Disaster Response Force (NDRF)">National Disaster Response Force (NDRF)</option>
+                                <option value="Assam State Disaster Management (ASDMA)">Assam State Disaster Management (ASDMA)</option>
+                                <option value="State Disaster Response Force (SDRF)">State Disaster Response Force (SDRF)</option>
+                                <option value="Public Works Department (PWD)">Public Works Department (PWD)</option>
+                                <option value="Highway Traffic Police">Highway Traffic Police</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="login-label" for="officerProfDistrict" style="font-weight: 700; color: #334155; font-size: 11px;">
+                                DISTRICT
+                            </label>
+                            <input type="text" id="officerProfDistrict" class="form-control" placeholder="e.g. East Jaintia Hills" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-auth-submit" style="background: linear-gradient(135deg, #0d9488, #0f766e); width: 100%; border: none; padding: 12px; border-radius: 8px; color: white; font-weight: 700; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <span>Confirm Deployment & Enter Application</span> ➔
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Quick Actions Sheet Modal -->
+    <div id="mobileMenuModal" class="modal-overlay" onclick="closeMobileMenuModal(event)">
+        <div class="modal-card mobile-menu-sheet" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div class="modal-title">⚡ Quick Command Actions</div>
+                <button class="modal-close" onclick="closeMobileMenuModal()">&times;</button>
+            </div>
+            
+            <!-- Mobile Persona Indicator & Switcher Strip -->
+            <div id="mobileRoleBadge" style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700;">Active Persona</div>
+                    <div style="font-size: 13px; font-weight: 800; color: #0f172a;">💼 Headquarters Employee</div>
+                </div>
+                <button onclick="closeMobileMenuModal(); openLoginModal();" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px; border-color: #0284c7; color: #0284c7;">
+                    🔁 Switch Role
+                </button>
+            </div>
+
+            <div class="mobile-menu-grid">
+                <button class="m-menu-tile" onclick="closeMobileMenuModal(); openCommandDashboard();">
+                    <span class="m-tile-icon">📊</span>
+                    <span class="m-tile-label">Central Dashboard</span>
+                </button>
+                <button id="mTileReport" class="m-menu-tile" onclick="closeMobileMenuModal(); openReportModal();">
+                    <span class="m-tile-icon">📷</span>
+                    <span class="m-tile-label">Report Hazard</span>
+                </button>
+                <button class="m-menu-tile" onclick="closeMobileMenuModal(); openSitrepModal();">
+                    <span class="m-tile-icon">📋</span>
+                    <span class="m-tile-label">Officer SITREP</span>
+                </button>
+                <button id="mTileLiveGps" class="m-menu-tile" onclick="closeMobileMenuModal(); toggleGpsTracking();">
+                    <span class="m-tile-icon">📍</span>
+                    <span class="m-tile-label" id="mTileLiveGpsLabel">Live GPS</span>
+                </button>
+                <button class="m-menu-tile" onclick="closeMobileMenuModal(); toggleDriveSimulator();">
+                    <span class="m-tile-icon">🚗</span>
+                    <span class="m-tile-label">Simulate Drive</span>
+                </button>
+                <button class="m-menu-tile" onclick="closeMobileMenuModal(); openEmergencyModal();">
+                    <span class="m-tile-icon">🏥</span>
+                    <span class="m-tile-label">Relief Camps</span>
+                </button>
+                <button class="m-menu-tile" onclick="closeMobileMenuModal(); switchMobileView('tabWeather');">
+                    <span class="m-tile-icon">🌧️</span>
+                    <span class="m-tile-label">Weather Alerts</span>
+                </button>
+                <button class="m-menu-tile" onclick="closeMobileMenuModal(); toggleMapLayersMenu();">
+                    <span class="m-tile-icon">🗺️</span>
+                    <span class="m-tile-label">Map Layers</span>
+                </button>
+                <button class="m-menu-tile" onclick="closeMobileMenuModal(); openIosInstallModal();" style="border-color: #bae6fd; background: #f0f9ff;">
+                    <span class="m-tile-icon">📱</span>
+                    <span class="m-tile-label" style="color: #0284c7;">iPhone / iOS App</span>
+                </button>
+            </div>
+            <!-- Mobile Sign Out Button -->
+            <div style="padding: 12px 16px; border-top: 1px solid #e2e8f0; background: #ffffff;">
+                <button onclick="closeMobileMenuModal(); handleSignOut();" class="btn btn-secondary" style="width: 100%; border-color: #fca5a5; color: #dc2626; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; font-size: 12.5px;">
+                    <span>↩️</span> Sign Out
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: iPhone / iOS Installation Guide -->
+    <div id="iosInstallModal" class="modal-overlay" onclick="closeIosInstallModal(event)">
+        <div class="modal-card" style="max-width: 480px; border: 1px solid #bae6fd; background: #ffffff;" onclick="event.stopPropagation()">
+            <div class="modal-header" style="background: #f0f9ff; border-bottom: 1px solid #bae6fd;">
+                <div class="modal-title" style="color: #0284c7; display: flex; align-items: center; gap: 8px;">
+                    <span>📱</span> Install on iPhone / iPad (iOS)
+                </div>
+                <button class="modal-close" onclick="closeIosInstallModal()">&times;</button>
+            </div>
+            
+            <div class="modal-body" style="padding: 18px 20px;">
+                <div style="font-size: 12px; color: #475569; line-height: 1.5; margin-bottom: 16px; background: #fef2f2; border-left: 3px solid #ef4444; padding: 10px 14px; border-radius: 6px;">
+                    <strong style="color: #dc2626;">Why APK doesn't work on iPhone:</strong><br>
+                    <code>.apk</code> files are strictly for Android devices. Apple iOS uses its official <strong>"Add to Home Screen" Web App</strong> engine to install apps instantly without needing the App Store!
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; gap: 12px; align-items: flex-start; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div style="background: #0284c7; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; font-size: 13px;">1</div>
+                        <div>
+                            <div style="font-weight: 700; color: #0f172a; font-size: 13px;">Open in Safari</div>
+                            <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Ensure this website is open in Apple <strong>Safari</strong> (default iPhone browser).</div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; align-items: flex-start; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div style="background: #0284c7; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; font-size: 13px;">2</div>
+                        <div>
+                            <div style="font-weight: 700; color: #0f172a; font-size: 13px;">Tap the Share Button <span style="display: inline-block; background: #e0f2fe; padding: 2px 7px; border-radius: 4px; font-size: 14px; color: #0284c7;">📤</span></div>
+                            <div style="font-size: 12px; color: #64748b; margin-top: 2px;">At the bottom bar of Safari, tap the <strong>Share</strong> button (square box with an arrow pointing up).</div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; align-items: flex-start; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div style="background: #10b981; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; font-size: 13px;">3</div>
+                        <div>
+                            <div style="font-weight: 700; color: #15803d; font-size: 13px;">Select "Add to Home Screen" <span style="display: inline-block; background: #dcfce7; padding: 2px 7px; border-radius: 4px; font-size: 14px; color: #15803d;">➕</span></div>
+                            <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Scroll down in the options menu, tap <strong>"Add to Home Screen"</strong>, then tap <strong>"Add"</strong> in the top right corner.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 14px; text-align: center; background: #ecfdf5; border: 1px dashed #86efac; padding: 12px; border-radius: 8px;">
+                    <div style="font-size: 12px; color: #15803d; font-weight: 700;">🎉 Done! AapdaMarg NE will appear on your iPhone Home Screen and launch in full-screen standalone app mode!</div>
+                </div>
+
+                <div style="margin-top: 16px; display: flex; gap: 8px;">
+                    <button type="button" onclick="closeIosInstallModal()" class="btn btn-secondary" style="flex: 1; justify-content: center; font-size: 13px; padding: 11px; font-weight: 600;">
+                        Got It, Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 1: Crowdsourced Hazard & Photo Upload -->
+    <div id="reportModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    📷 Report Sudden Hazard & Upload Photo
+                </div>
+                <button class="modal-close" onclick="closeReportModal()">&times;</button>
+            </div>
+            <form id="hazardReportForm" class="modal-body" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="hazardType">Hazard Category</label>
+                    <select id="hazardType" name="hazard_type" class="form-control" required>
+                        <option value="landslide">Active Landslide / Mudflow</option>
+                        <option value="flood">Severe Flood / Submerged Highway</option>
+                        <option value="damaged_bridge">Damaged / Weakened Bridge</option>
+                        <option value="road_collapse">Road Collapse / Subsidence</option>
+                        <option value="heavy_debris">Fallen Trees / Rock Debris</option>
+                        <option value="cloudburst">Cloudburst / Flash Surge</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="reportTitle">Hazard Headline / Location</label>
+                    <input type="text" id="reportTitle" name="title" class="form-control" placeholder="e.g. NH-6 Debris Slide near Mile Marker 42" required>
+                </div>
+
+                <!-- Photo Upload Zone -->
+                <div class="form-group">
+                    <label>Hazard Photo Proof (Updates Map & Visuals)</label>
+                    <div id="photoDropZone" class="photo-drop-zone" onclick="document.getElementById('photoInput').click()">
+                        <div style="font-size: 28px; margin-bottom: 6px;">📷</div>
+                        <div style="font-size: 13px; font-weight: bold; color: #0284c7;">Click to upload or drag & drop photo</div>
+                        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">PNG, JPG, WEBP accepted</div>
+                        <input type="file" id="photoInput" name="photo" accept="image/*" style="display: none;">
+                    </div>
+
+                    <div id="photoPreviewContainer" class="photo-preview-container">
+                        <img id="photoPreviewImg" class="photo-preview-img" src="" alt="Photo Preview">
+                        <button type="button" onclick="removePhoto()" style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 26px; height: 26px; cursor: pointer;">&times;</button>
+                    </div>
+                </div>
+
+                <!-- Location Selector -->
+                <div class="form-group">
+                    <label>Hazard Coordinates</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                        <button type="button" class="btn btn-secondary" style="flex: 1; font-size: 11.5px;" onclick="startPickLocation()">
+                            📍 Pick Location on Map
+                        </button>
+                        <button type="button" class="btn btn-secondary" style="flex: 1; font-size: 11.5px;" onclick="useCurrentGpsLocation()">
+                            📍 Use Device GPS
+                        </button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <input type="number" step="any" id="reportLat" name="latitude" class="form-control" placeholder="Latitude" required>
+                        <input type="number" step="any" id="reportLng" name="longitude" class="form-control" placeholder="Longitude" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="reportSeverity">Threat Severity</label>
+                    <select id="reportSeverity" name="severity" class="form-control">
+                        <option value="low">Low (Passable with caution)</option>
+                        <option value="medium" selected>Moderate (4x4 or High Clearance only)</option>
+                        <option value="high">Severe (Near blocked / High danger)</option>
+                        <option value="critical">Critical / Impassable (Complete road collapse or washout)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="reportDesc">Description & On-Ground Details</label>
+                    <textarea id="reportDesc" name="description" class="form-control" rows="3" placeholder="Describe water depth, mud accumulation, stranded vehicles, or available detour advice..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="reporterName">Reporter Name / Agency</label>
+                    <input type="text" id="reporterName" name="reporter_name" class="form-control" placeholder="e.g. Local Driver / ASDMA Volunteer / Police Patrol" value="Citizen Responder">
+                </div>
+
+                <button type="submit" id="btnSubmitReport" class="btn-calculate" style="margin-top: 10px;">
+                    🚀 Broadcast Hazard & Update Routes
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: Photo Lightbox -->
+    <div id="photoViewerModal" class="modal-overlay" onclick="closePhotoModal()">
+        <div class="modal-card" style="max-width: 700px; background: #ffffff; border: 1px solid #e2e8f0;" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div id="photoViewerTitle" class="modal-title">Hazard Photo Verification</div>
+                <button class="modal-close" onclick="closePhotoModal()">&times;</button>
+            </div>
+            <div style="padding: 10px;">
+                <img id="photoViewerImg" src="" alt="Verified Disaster Photo" style="width: 100%; max-height: 480px; object-fit: contain; border-radius: 8px;">
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Emergency Helplines & Relief Shelters -->
+    <div id="emergencyModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 650px;">
+            <div class="modal-header">
+                <div class="modal-title">
+                    🚨 Emergency Helplines & Evacuation Shelters
+                </div>
+                <button class="modal-close" onclick="closeEmergencyModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div>
+                    <h4 style="font-size: 13px; color: #ef4444; text-transform: uppercase; margin-bottom: 8px;">Disaster Response Authorities (NDRF / BRO / SDMA)</h4>
+                    <div id="emergencyContactsList">Loading helplines...</div>
+                </div>
+
+                <div style="margin-top: 14px;">
+                    <h4 style="font-size: 13px; color: #34d399; text-transform: uppercase; margin-bottom: 8px;">Active Flood & Hill Evacuation Shelters</h4>
+                    <div id="reliefCampsList">Loading relief camps...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 4: Centralized Command & Logistics Dashboard -->
+    <div id="dashboardModal" class="modal-overlay" onclick="closeCommandDashboard()">
+        <div class="modal-card dashboard-modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div class="modal-title">
+                    📊 Centralized Disaster Logistics & Regional Readiness Dashboard
+                </div>
+                <button class="modal-close" onclick="closeCommandDashboard()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 16px;">
+                <!-- KPI Cards -->
+                <div class="kpi-grid">
+                    <div class="kpi-card blue">
+                        <div class="kpi-title">Total Essential Convoys</div>
+                        <div class="kpi-value" id="kpiTotalConvoys">5</div>
+                        <div class="kpi-sub">GPS Integrated & Tracked</div>
+                    </div>
+                    <div class="kpi-card green">
+                        <div class="kpi-title">In Transit (Optimal)</div>
+                        <div class="kpi-value" id="kpiInTransit" style="color: #16a34a;">4</div>
+                        <div class="kpi-sub">En Route to Hospitals/PDS</div>
+                    </div>
+                    <div class="kpi-card red">
+                        <div class="kpi-title">Delayed / Stranded</div>
+                        <div class="kpi-value" id="kpiDelayed" style="color: #dc2626;">1</div>
+                        <div class="kpi-sub">Landslide / Flood Impasse</div>
+                    </div>
+                    <div class="kpi-card amber">
+                        <div class="kpi-title">Critical Corridor Alerts</div>
+                        <div class="kpi-value" id="kpiCriticalAlerts" style="color: #d97706;">3</div>
+                        <div class="kpi-sub">Automated Hazard Collisions</div>
+                    </div>
+                </div>
+
+                <!-- 2-Column Grid: District Reserves & Corridor Health -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px;">
+                        <h4 style="font-size: 12px; font-weight: 700; color: #0284c7; text-transform: uppercase; margin-bottom: 8px;">
+                            ⛽ District Fuel & Ration Reserve Levels (Days Remaining)
+                        </h4>
+                        <div id="districtReservesContainer">Loading district reserves...</div>
+                    </div>
+
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px;">
+                        <h4 style="font-size: 12px; font-weight: 700; color: #dc2626; text-transform: uppercase; margin-bottom: 8px;">
+                            🛣️ Critical Transport Corridor Readiness
+                        </h4>
+                        <div id="corridorHealthContainer">Loading corridor status...</div>
+                    </div>
+                </div>
+
+                <!-- Live Fleet Tracking Table -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; overflow-x: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <h4 style="font-size: 12px; font-weight: 700; color: #0f172a; text-transform: uppercase;">
+                            🚚 Live Essential Commodity Fleet Movement
+                        </h4>
+                        <span style="font-size: 11px; color: #64748b;">Real-time GPS Tracking</span>
+                    </div>
+                    <table class="fleet-table">
+                        <thead>
+                            <tr>
+                                <th>Vehicle ID</th>
+                                <th>Cargo Type</th>
+                                <th>Route Corridor</th>
+                                <th>Driver / Contact</th>
+                                <th>Status</th>
+                                <th>ETA</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashboardFleetTableBody">
+                            <tr><td colspan="7" style="text-align: center;">Loading fleet records...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 5: Field Official & Authority SITREP Submission -->
+    <div id="sitrepModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 600px; background: #ffffff;" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div class="modal-title">
+                    📋 Field Official Situation Report (SITREP)
+                </div>
+                <button class="modal-close" onclick="closeSitrepModal()">&times;</button>
+            </div>
+            <form id="sitrepForm" class="modal-body" onsubmit="submitFieldSitrep(event)" enctype="multipart/form-data">
+                <!-- Verified Officer Active Identity Strip (Configured at Login) -->
+                <div class="officer-verified-strip" style="background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 20px;">⭐</span>
+                        <div>
+                            <div style="font-size: 13px; font-weight: 800; color: #0f766e;" id="sitrepBadgeOfficer">Major R. Sangma (Officer Commanding)</div>
+                            <div style="font-size: 11px; color: #0d9488; font-weight: 600;" id="sitrepBadgeAgency">Border Roads Organisation (BRO) • East Jaintia Hills</div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 3px 8px; border-color: #0d9488; color: #0d9488; font-weight: 600;" onclick="openOfficerProfileModal()">
+                        Edit
+                    </button>
+                </div>
+
+                <!-- Hidden inputs carrying verified officer credentials -->
+                <input type="hidden" id="sitrepOfficerName" name="officer_name" value="Major R. Sangma">
+                <input type="hidden" id="sitrepOfficerRank" name="officer_rank" value="Officer Commanding">
+                <input type="hidden" id="sitrepAgency" name="agency" value="Border Roads Organisation (BRO)">
+                <input type="hidden" id="sitrepDistrict" name="district" value="East Jaintia Hills">
+
+                <div class="form-group">
+                    <label for="sitrepCorridor">Highway Sector / Corridor Name</label>
+                    <input type="text" id="sitrepCorridor" name="corridor" class="form-control" placeholder="e.g. NH-6 Sonapur Tunnel Portal" required>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="form-group">
+                        <label for="sitrepLat">Latitude</label>
+                        <input type="number" step="any" id="sitrepLat" name="latitude" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sitrepLng">Longitude</label>
+                        <input type="number" step="any" id="sitrepLng" name="longitude" class="form-control" required>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="form-group">
+                        <label for="clearancePct">Clearance Progress (%)</label>
+                        <input type="number" id="clearancePct" name="clearance_pct" min="0" max="100" class="form-control" value="35" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="passabilityStatus">Passability Status</label>
+                        <select id="passabilityStatus" name="passability" class="form-control">
+                            <option value="closed">Closed / Severed</option>
+                            <option value="4x4_only">High Clearance 4x4 Only</option>
+                            <option value="single_lane_escort">Single Lane Police Escort</option>
+                            <option value="all_vehicles">Fully Restored / Open</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="bridgeStatus">Bridge & Culvert Structural Integrity</label>
+                    <select id="bridgeStatus" name="bridge_status" class="form-control">
+                        <option value="intact">Intact & Load Certified</option>
+                        <option value="scour_inspection">Scour Inspection Required</option>
+                        <option value="critical_crack">Critical Foundation Cracks</option>
+                        <option value="washed_out">Washed Out / Bailey Bridge Needed</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="sitrepNotes">Operational Assessment & Clearance ETA</label>
+                    <textarea id="sitrepNotes" name="notes" class="form-control" rows="2" placeholder="Details on deployed heavy earthmovers, remaining boulder volume, or detours..."></textarea>
+                </div>
+
+                <!-- Officer Field Photo Evidence Upload Zone -->
+                <div class="form-group" style="margin-bottom: 14px;">
+                    <label style="font-weight: 700; font-size: 11.5px; color: #1e293b; display: flex; justify-content: space-between; align-items: center;">
+                        <span>📷 Field Photo / Structural Evidence</span>
+                        <span style="font-size: 10px; color: #0284c7; font-weight: 600;">Optional</span>
+                    </label>
+                    <div id="sitrepPhotoDropZone" class="photo-drop-zone" onclick="document.getElementById('sitrepPhotoInput').click()" style="border: 2px dashed rgba(2, 132, 199, 0.4); border-radius: 8px; padding: 14px; text-align: center; cursor: pointer; background: #f8fafc; transition: all 0.2s ease;">
+                        <div style="font-size: 24px; margin-bottom: 4px;">📷</div>
+                        <div style="font-size: 12px; font-weight: 700; color: #0284c7;">Click to upload or drag & drop geotagged evidence photo</div>
+                        <div style="font-size: 10.5px; color: #64748b; margin-top: 3px;">JPG, PNG, WEBP accepted (Bridge scour, mudslide clearance, escort convoy)</div>
+                        <input type="file" id="sitrepPhotoInput" name="photo" accept="image/*" style="display: none;">
+                    </div>
+
+                    <div id="sitrepPhotoPreviewContainer" class="photo-preview-container" style="display: none; position: relative; margin-top: 8px; border-radius: 8px; overflow: hidden; max-height: 180px; border: 1px solid #cbd5e1;">
+                        <img id="sitrepPhotoPreviewImg" class="photo-preview-img" src="" alt="SITREP Evidence Photo Preview" style="width: 100%; max-height: 180px; object-fit: cover;">
+                        <button type="button" onclick="removeSitrepPhoto()" style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 26px; height: 26px; cursor: pointer; font-size: 14px; line-height: 1;">&times;</button>
+                    </div>
+                </div>
+
+                <button type="submit" id="btnSubmitSitrep" class="btn-calculate" style="background: linear-gradient(135deg, #0284c7, #2563eb);">
+                    📋 Broadcast Verified Situation Report
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Instant Automated GPS SOS Dispatch Screen -->
+    <div id="instantSosModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 500px; border: 2px solid #ef4444; background: #ffffff; box-shadow: 0 10px 40px rgba(239, 68, 68, 0.2);" onclick="event.stopPropagation()">
+            <div class="modal-header" style="background: #fef2f2; border-bottom: 1px solid #fecaca;">
+                <div class="modal-title" style="color: #dc2626; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 22px;">🚨</span> AUTOMATIC SOS DISPATCH
+                </div>
+                <button class="modal-close" onclick="cancelInstantSos()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div class="auto-sos-container">
+                    <div class="radar-scan-box">
+                        <div class="radar-circle"></div>
+                        <div class="radar-circle"></div>
+                        <div class="radar-circle"></div>
+                        <div class="radar-center-icon">📡</div>
+                    </div>
+
+                    <div id="instantGpsStatusText" style="font-size: 13px; font-weight: 700; color: #0284c7; margin-bottom: 4px;">
+                        Accessing Live GPS Satellite Telemetry...
+                    </div>
+                    <div id="instantGpsBadge" class="gps-lock-badge" style="display: none;">
+                        ✓ GPS Locked: <span id="instantGpsCoords">0.0, 0.0</span>
+                    </div>
+
+                    <div style="font-size: 11.5px; color: #991b1b; margin: 10px 0 6px 0;">
+                        Auto-transmitting distress alert to closest emergency services in:
+                    </div>
+                    <div class="countdown-timer-circle" id="instantCountdownNum">
+                        5
+                    </div>
+
+                    <!-- Auto-Identified Nearest Stations Grid -->
+                    <div class="auto-sos-station-grid" id="instantStationGrid" style="display: none;">
+                        <div class="auto-sos-station-item">
+                            <div style="font-size: 10px; color: #dc2626; font-weight: 800;">🏥 NEAREST HOSPITAL</div>
+                            <div id="instantNearHospital" style="font-size: 12px; font-weight: bold; color: #0f172a;">Detecting...</div>
+                            <div id="instantNearHospitalDist" style="font-size: 10.5px; color: #16a34a;">-- km (ETA -- mins)</div>
+                        </div>
+                        <div class="auto-sos-station-item">
+                            <div style="font-size: 10px; color: #0284c7; font-weight: 800;">🚔 NEAREST POLICE</div>
+                            <div id="instantNearPolice" style="font-size: 12px; font-weight: bold; color: #0f172a;">Detecting...</div>
+                            <div id="instantNearPoliceDist" style="font-size: 10.5px; color: #0284c7;">-- km</div>
+                        </div>
+                    </div>
+
+                    <!-- Controls -->
+                    <button type="button" id="btnInstantSendNow" onclick="executeAutoSosDispatchNow()" class="btn-instant-transmit" style="margin-top: 10px;">
+                        ⚡ TRANSMIT ALERT NOW (1-CLICK)
+                    </button>
+
+                    <div style="display: flex; gap: 10px; margin-top: 12px;">
+                        <button type="button" class="btn btn-secondary" style="flex: 1; font-size: 11px;" onclick="switchToDetailedForm()">
+                            📝 Add Extra Details First
+                        </button>
+                        <button type="button" class="btn btn-secondary" style="flex: 1; font-size: 11px; border-color: #cbd5e1; color: #64748b;" onclick="cancelInstantSos()">
+                            ❌ Cancel Dispatch
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 6: Emergency Complaint & Automated SOS Dispatch -->
+    <div id="sosComplaintModal" class="modal-overlay" onclick="closeEmergencyComplaintModal()">
+        <div class="modal-card" style="max-width: 580px; border: 1px solid #fca5a5; background: #ffffff;" onclick="event.stopPropagation()">
+            <div class="modal-header" style="background: #fef2f2; border-bottom: 1px solid #fecaca;">
+                <div class="modal-title" style="color: #dc2626; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">🚨</span> Emergency Complaint & Nearest Unit Alert
+                </div>
+                <button class="modal-close" onclick="closeEmergencyComplaintModal()">&times;</button>
+            </div>
+            
+            <form id="emergencyComplaintForm" class="modal-body" onsubmit="submitEmergencyComplaint(event)">
+                <label style="font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 6px; display: block;">
+                    Select Emergency Service Needed:
+                </label>
+                <div class="service-type-grid">
+                    <div class="service-card" onclick="selectSosService('police', this)">
+                        <div class="service-card-icon">🚔</div>
+                        <div class="service-card-title">Police Station</div>
+                        <div class="service-card-sub">Law, Rescue & Escort</div>
+                    </div>
+                    <div class="service-card active" onclick="selectSosService('ambulance', this)">
+                        <div class="service-card-icon">🚑</div>
+                        <div class="service-card-title">Ambulance Hub</div>
+                        <div class="service-card-sub">108 Trauma / Medical</div>
+                    </div>
+                    <div class="service-card" onclick="selectSosService('both', this)">
+                        <div class="service-card-icon">🚨</div>
+                        <div class="service-card-title">Both Services</div>
+                        <div class="service-card-sub">Police + Ambulance</div>
+                    </div>
+                </div>
+
+                <div id="sosServiceNotice" style="font-size: 11px; color: #991b1b; background: #fef2f2; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid #ef4444;">
+                    🚑 System will automatically route to and dispatch the <strong>nearest Hospital / 108 ALS Ambulance</strong>.
+                </div>
+
+                <div class="form-group">
+                    <label for="sosNature">Nature of Emergency</label>
+                    <select id="sosNature" class="form-control" required>
+                        <option value="trauma_injury">Trauma / Severe Physical Injury</option>
+                        <option value="stranded_flood">Stranded in Rapidly Rising Floodwater</option>
+                        <option value="landslide_trapped">Trapped Vehicle under Mudslide / Rockfall</option>
+                        <option value="critical_medical">Critical Medical (Cardiac, Childbirth, Oxygen Depletion)</option>
+                        <option value="law_and_order">Highway Robbery, Violence or Disaster Looting</option>
+                        <option value="search_rescue">Missing Person / Remote Wilderness Extraction</option>
+                    </select>
+                </div>
+
+                <!-- Coordinates & Detection -->
+                <div class="form-group">
+                    <label>Incident Location (Used to Find Nearest Station)</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                        <button type="button" class="btn btn-secondary" style="flex: 1; font-size: 11px; border-color: #38bdf8; color: #38bdf8;" onclick="useSosLiveGps()">
+                            📍 Detect My Live GPS
+                        </button>
+                        <button type="button" class="btn btn-secondary" style="flex: 1; font-size: 11px;" onclick="startPickSosLocation()">
+                            📍 Pick on Map
+                        </button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <input type="number" step="any" id="sosLat" class="form-control" placeholder="Latitude (e.g. 25.109)" required>
+                        <input type="number" step="any" id="sosLng" class="form-control" placeholder="Longitude (e.g. 92.362)" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="sosAddress">Highway / Landmark / Road Sector</label>
+                    <input type="text" id="sosAddress" class="form-control" placeholder="e.g. NH-6 near Sonapur Tunnel, km 142" required>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="form-group">
+                        <label for="sosCallerName">Caller / Contact Person</label>
+                        <input type="text" id="sosCallerName" class="form-control" placeholder="Your Name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sosCallerPhone">Emergency Phone Number</label>
+                        <input type="tel" id="sosCallerPhone" class="form-control" placeholder="+91-98765-43210" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="sosSeverity">Emergency Severity</label>
+                    <select id="sosSeverity" class="form-control">
+                        <option value="critical">Critical (Immediate Danger to Life)</option>
+                        <option value="high">High (Escalating Risk / Urgent Response)</option>
+                        <option value="medium">Medium (Stranded but Stable)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="sosDetails">Emergency Details / Patient Condition</label>
+                    <textarea id="sosDetails" class="form-control" rows="2" placeholder="State number of victims, injuries, road blockades or special assistance needed..."></textarea>
+                </div>
+
+                <button type="submit" id="btnSubmitSos" class="btn-calculate btn-sos" style="margin-top: 6px; padding: 12px; font-size: 13px;">
+                    🚨 TRANSMIT EMERGENCY SOS & ALERT NEAREST STATION
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 7: Automated Alert Dispatch Confirmation Receipt -->
+    <div id="sosReceiptModal" class="modal-overlay" onclick="closeSosReceiptModal()">
+        <div class="modal-card" style="max-width: 520px; border: 1px solid #fca5a5; background: #ffffff;" onclick="event.stopPropagation()">
+            <div class="modal-header" style="background: #fef2f2; border-bottom: 1px solid #fecaca;">
+                <div class="modal-title" style="color: #dc2626;">
+                    🚨 EMERGENCY ALERT DISPATCH TRANSMITTED
+                </div>
+                <button class="modal-close" onclick="closeSosReceiptModal()">&times;</button>
+            </div>
+            
+            <div class="modal-body" style="padding: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                    <div style="background: #10b981; color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 13px;">✓</div>
+                    <span style="font-size: 12px; color: #16a34a; font-weight: bold;">
+                        Automated CAD Alert Delivered to Nearest Responding Unit
+                    </span>
+                </div>
+
+                <div class="receipt-box">
+                    <div class="receipt-station-header">
+                        <div class="receipt-station-icon">🚨</div>
+                        <div>
+                            <div style="font-size: 10px; color: #fca5a5; font-weight: 800; text-transform: uppercase;">
+                                Assigned Nearest Facility
+                            </div>
+                            <h3 id="receiptStationName" style="font-size: 14px; font-weight: 800; color: #f8fafc; margin: 2px 0;">
+                                Nearest Emergency Hub
+                            </h3>
+                            <div id="receiptStationSub" style="font-size: 11px; color: #94a3b8;">
+                                District Division
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="receipt-metrics">
+                        <div class="receipt-metric-item">
+                            <div class="receipt-metric-label">Distance to Incident</div>
+                            <div class="receipt-metric-val" id="receiptDistance">0 km</div>
+                        </div>
+                        <div class="receipt-metric-item">
+                            <div class="receipt-metric-label">Estimated Arrival (ETA)</div>
+                            <div class="receipt-metric-val" id="receiptEta" style="color: #34d399;">0 mins</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 10px; font-size: 11px; line-height: 1.5; color: #cbd5e1;">
+                        <div><strong>Assigned Response Unit:</strong> <span id="receiptUnit" style="color: #38bdf8;">Unit</span></div>
+                        <div><strong>Dispatch Tracking Ticket:</strong> <span id="receiptTicketId" style="color: #fbbf24; font-weight: bold;">SOS-0000</span></div>
+                    </div>
+
+                    <div id="receiptSecondaryBox" style="display: none;"></div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;">
+                    <a id="receiptPhoneBtn" href="tel:112" style="background: #dc2626; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: 800; font-size: 12px; text-decoration: none; display: block;">
+                        📞 Call Station Line
+                    </a>
+                    <button type="button" onclick="closeSosReceiptModal()" class="btn btn-secondary" style="font-size: 12px; justify-content: center;">
+                        📍 View on Live Map
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application JavaScript Bundles -->
+    <script src="/static/js/map.js?v=6.0.0"></script>
+    <script src="/static/js/routing.js?v=6.0.0"></script>
+    <script src="/static/js/weather.js?v=6.0.0"></script>
+    <script src="/static/js/reporting.js?v=6.0.0"></script>
+    <script src="/static/js/gps.js?v=6.0.0"></script>
+    <script src="/static/js/fleet.js?v=7.0.0"></script>
+    <script src="/static/js/sitrep.js?v=7.0.0"></script>
+    <script src="/static/js/sos.js?v=7.0.0"></script>
+    <script src="/static/js/role.js?v=7.0.0"></script>
+    <script src="/static/js/app.js?v=7.0.0"></script>
+
+
+
+
+
+
+</body>
+</html>

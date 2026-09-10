@@ -1,12 +1,31 @@
 import os
+import shutil
 
 # Base Directories
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-DB_PATH = os.path.join(BASE_DIR, "ne_disaster.db")
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# Check if running in Vercel Serverless environment (where /var/task is read-only)
+IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
+if IS_VERCEL:
+    TMP_DIR = "/tmp"
+    UPLOAD_DIR = os.path.join(TMP_DIR, "uploads")
+    DB_PATH = os.path.join(TMP_DIR, "ne_disaster.db")
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    
+    # Copy pre-seeded database to /tmp if not already present
+    bundled_db = os.path.join(BASE_DIR, "ne_disaster.db")
+    if os.path.exists(bundled_db) and not os.path.exists(DB_PATH):
+        try:
+            shutil.copy2(bundled_db, DB_PATH)
+        except Exception as e:
+            print(f"Notice: could not copy bundled db to /tmp: {e}")
+else:
+    UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+    DB_PATH = os.path.join(BASE_DIR, "ne_disaster.db")
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 os.makedirs(STATIC_DIR, exist_ok=True)
 
 # North East India Center Coordinates

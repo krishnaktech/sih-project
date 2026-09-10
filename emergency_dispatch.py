@@ -1,4 +1,4 @@
-﻿import math
+import math
 import datetime
 from database import get_db
 
