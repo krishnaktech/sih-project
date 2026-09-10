@@ -29,9 +29,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def add_no_cache_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+class NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
 # Mount static and upload directories
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.mount("/static", NoCacheStaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/uploads", NoCacheStaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.mount("/css", NoCacheStaticFiles(directory=os.path.join(STATIC_DIR, "css")), name="css")
+app.mount("/js", NoCacheStaticFiles(directory=os.path.join(STATIC_DIR, "js")), name="js")
+app.mount("/images", NoCacheStaticFiles(directory=os.path.join(STATIC_DIR, "images")), name="images")
 
 @app.on_event("startup")
 def startup_event():
@@ -50,8 +69,24 @@ def startup_event():
 def read_root():
     index_file = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_file):
-        return FileResponse(index_file)
+        response = FileResponse(index_file)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
     return {"message": "AapdaMarg NE API is running. index.html is being initialized."}
+
+@app.get("/download/apk")
+@app.get("/AapdaMarg-NE.apk")
+def download_apk():
+    apk_file = os.path.join(os.path.dirname(__file__), "AapdaMarg-NE.apk")
+    if os.path.exists(apk_file):
+        return FileResponse(
+            apk_file,
+            filename="AapdaMarg-NE.apk",
+            media_type="application/vnd.android.package-archive"
+        )
+    raise HTTPException(status_code=404, detail="APK file not found.")
 
 # ----------------- Nodes & Geographic Metadata -----------------
 
@@ -187,6 +222,7 @@ class RouteRequest(BaseModel):
 
 @app.post("/api/route")
 def calculate_route(req: RouteRequest):
+    print(f"DEBUG_ROUTE: origin={req.origin}, destination={req.destination}, vehicle_mode={req.vehicle_mode}", flush=True)
     weather_dict = {}
     for item in get_all_weather():
         weather_dict[item["city_id"]] = item
@@ -199,6 +235,9 @@ def calculate_route(req: RouteRequest):
     )
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
+    safe_time = result.get('safest_route', {}).get('estimated_time_hours')
+    direct_time = result.get('direct_route', {}).get('estimated_time_hours')
+    print(f"DEBUG_ROUTE RESULT: safe_time={safe_time} hrs, direct_time={direct_time} hrs", flush=True)
     return result
 
 # ----------------- Crowdsourced Reporting & Photo Upload -----------------
@@ -428,3 +467,4 @@ def update_complaint_status(complaint_id: int, req: ComplaintStatusUpdate):
     if not updated:
         raise HTTPException(status_code=404, detail="Complaint not found")
     return {"success": True, "complaint": updated}
+

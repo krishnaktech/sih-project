@@ -163,16 +163,16 @@ async function loadCommunityFeed() {
                         </span>
                         <span style="font-size: 10px; color: #94a3b8;">${dateStr}</span>
                     </div>
-                    <strong style="font-size: 12.5px; color: #f8fafc; display: block; margin: 3px 0;">${r.title}</strong>
-                    <p style="font-size: 11px; color: #94a3b8; line-height: 1.3; margin-bottom: 8px;">${r.description}</p>
+                    <strong style="font-size: 12.5px; color: #0f172a; display: block; margin: 3px 0;">${r.title}</strong>
+                    <p style="font-size: 11px; color: #475569; line-height: 1.3; margin-bottom: 8px;">${r.description}</p>
                     
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px; font-size: 10.5px;">
-                        <span style="color: #cbd5e1;">By: <strong>${r.reporter_name}</strong></span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e2e8f0; padding-top: 6px; font-size: 10.5px;">
+                        <span style="color: #64748b;">By: <strong style="color: #1e293b;">${r.reporter_name}</strong></span>
                         <div style="display: flex; gap: 8px;">
-                            <button onclick="zoomToCoord(${r.latitude}, ${r.longitude})" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; padding: 2px 7px; cursor: pointer; font-size: 10.5px;">
+                            <button onclick="zoomToCoord(${r.latitude}, ${r.longitude})" style="background: #eff6ff; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 2px 7px; cursor: pointer; font-size: 10.5px; font-weight: 600;">
                                 📍 View on Map
                             </button>
-                            <button onclick="upvoteIncident(${r.id}, this)" style="background: rgba(255,255,255,0.08); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 2px 7px; cursor: pointer; font-size: 10.5px;">
+                            <button onclick="upvoteIncident(${r.id}, this)" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 7px; cursor: pointer; font-size: 10.5px; font-weight: 600;">
                                 👍 ${r.upvotes}
                             </button>
                         </div>

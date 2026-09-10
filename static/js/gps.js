@@ -14,11 +14,63 @@ let simIndex = 0;
 let simRoute = [];
 
 // Audio Context for Danger Proximity Beep
-let audioCtx = null;
+function hideGpsHud() {
+    const hud = document.getElementById('gpsHudBar');
+    if (hud) {
+        hud.classList.add('hidden');
+        hud.style.setProperty('display', 'none', 'important');
+    }
+    
+    // Adjust locate me button position on mobile
+    const locateBtn = document.querySelector('.btn-locate-me');
+    if (locateBtn && window.innerWidth <= 768) {
+        const peekCard = document.getElementById('mobileRoutePeekCard');
+        const hasPeek = peekCard && getComputedStyle(peekCard).display !== 'none';
+        locateBtn.style.setProperty('bottom', hasPeek ? '135px' : '75px', 'important');
+    }
+}
+
+function showGpsHud() {
+    const hud = document.getElementById('gpsHudBar');
+    const peekCard = document.getElementById('mobileRoutePeekCard');
+    const hasPeek = peekCard && getComputedStyle(peekCard).display !== 'none';
+
+    if (hud) {
+        hud.classList.remove('hidden');
+        hud.style.removeProperty('display');
+        if (window.innerWidth <= 768) {
+            hud.style.setProperty('display', 'grid', 'important');
+            hud.style.setProperty('bottom', hasPeek ? '126px' : '66px', 'important');
+        } else {
+            hud.style.setProperty('display', 'flex', 'important');
+            const hqBanner = document.getElementById('hqFleetRadarBanner');
+            const officerBanner = document.getElementById('officerTacticalBanner');
+            const hasBanner = (hqBanner && getComputedStyle(hqBanner).display === 'flex') || (officerBanner && getComputedStyle(officerBanner).display === 'flex');
+            hud.style.top = hasBanner ? '72px' : '15px';
+        }
+    }
+    
+    // Adjust locate me button position on mobile
+    const locateBtn = document.querySelector('.btn-locate-me');
+    if (locateBtn && window.innerWidth <= 768) {
+        locateBtn.style.setProperty('bottom', hasPeek ? '195px' : '145px', 'important');
+    }
+}
+
+function closeGpsHud() {
+    if (isGpsActive) {
+        toggleGpsTracking();
+    } else if (isSimulating) {
+        stopDriveSimulator();
+        hideGpsHud();
+    } else {
+        hideGpsHud();
+    }
+}
 
 function initGpsSubsystem() {
     console.log("Initializing Real-Time GPS Subsystem...");
-    // Auto-locate once on startup to place user
+    // Auto-locate once on startup to place user marker without activating HUD
     requestInitialLocation();
 }
 
@@ -38,17 +90,24 @@ function requestInitialLocation() {
 
 function toggleGpsTracking() {
     const btn = document.getElementById('btnToggleGps');
+    const mobileTileLabel = document.getElementById('mTileLiveGpsLabel');
     if (isGpsActive) {
         stopRealtimeGps();
         if (btn) {
             btn.innerHTML = '📍 Live GPS: OFF';
             btn.classList.remove('btn-gps-active');
         }
+        if (mobileTileLabel) {
+            mobileTileLabel.innerText = "Live GPS";
+        }
     } else {
         startRealtimeGps();
         if (btn) {
-            btn.innerHTML = '📡 Live GPS: ACTIVE';
+            btn.innerHTML = '📍 Live GPS: ACTIVE';
             btn.classList.add('btn-gps-active');
+        }
+        if (mobileTileLabel) {
+            mobileTileLabel.innerText = "Live GPS: ON";
         }
     }
 }
@@ -64,7 +123,7 @@ function startRealtimeGps() {
     }
 
     isGpsActive = true;
-    document.getElementById('gpsHudBar').style.display = 'flex';
+    showGpsHud();
 
     gpsWatchId = navigator.geolocation.watchPosition(
         (pos) => {
@@ -72,7 +131,8 @@ function startRealtimeGps() {
         },
         (err) => {
             console.warn("GPS watch error:", err.message);
-            document.getElementById('hudGpsStatus').innerText = "Signal Weak";
+            const elStatus = document.getElementById('hudGpsStatus');
+            if (elStatus) elStatus.innerText = "Signal Weak";
         },
         {
             enableHighAccuracy: true,
@@ -88,7 +148,11 @@ function stopRealtimeGps() {
         gpsWatchId = null;
     }
     isGpsActive = false;
-    document.getElementById('hudGpsStatus').innerText = "Inactive";
+    const elStatus = document.getElementById('hudGpsStatus');
+    if (elStatus) elStatus.innerText = "Inactive";
+    if (!isSimulating) {
+        hideGpsHud();
+    }
 }
 
 function handleGpsUpdate(pos) {
@@ -152,8 +216,12 @@ function renderGpsMarkerOnMap(lat, lng, accuracy, heading) {
 }
 
 function updateGpsHud(lat, lng, speed, altitude, accuracy) {
-    const hudBar = document.getElementById('gpsHudBar');
-    if (hudBar) hudBar.style.display = 'flex';
+    if (!isGpsActive && !isSimulating) {
+        hideGpsHud();
+        return;
+    }
+
+    showGpsHud();
 
     const elCoord = document.getElementById('hudCoords');
     const elSpeed = document.getElementById('hudSpeed');
@@ -163,9 +231,9 @@ function updateGpsHud(lat, lng, speed, altitude, accuracy) {
 
     if (elCoord) elCoord.innerText = `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
     if (elSpeed) elSpeed.innerText = `${speed} km/h`;
-    if (elAlt) elAlt.innerText = altitude;
+    if (elAlt) elAlt.innerText = `${altitude}`;
     if (elAccuracy) elAccuracy.innerText = `±${accuracy.toFixed(0)}m`;
-    if (elStatus) elStatus.innerText = "Tracking";
+    if (elStatus) elStatus.innerText = isSimulating ? "Drive Sim (Active)" : "Tracking";
 }
 
 // Proximity Threat & Early Warning Geofencing
@@ -217,7 +285,7 @@ async function evaluateProximityThreats(userLat, userLng) {
                 // Safe
                 if (elThreat) {
                     elThreat.className = "gps-hud-value safe";
-                    elThreat.innerText = `🛡️ Safe (${closestHazard.distance_km.toFixed(0)} km)`;
+                    elThreat.innerText = `✅ Safe (${closestHazard.distance_km.toFixed(0)} km)`;
                 }
                 if (banner) banner.style.display = 'none';
             }
@@ -255,14 +323,11 @@ function useGpsAsOrigin() {
 
 function setGpsOrigin(lat, lng) {
     const originSelect = document.getElementById('originSelect');
-    
-    // Check if custom GPS option exists; if not, create it
     let gpsOption = originSelect.querySelector('option[value^="gps:"]');
     if (!gpsOption) {
         gpsOption = document.createElement('option');
         originSelect.insertBefore(gpsOption, originSelect.firstChild);
     }
-
     const val = `gps:${lat.toFixed(5)},${lng.toFixed(5)}`;
     gpsOption.value = val;
     gpsOption.textContent = `📍 My Live GPS (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
@@ -309,8 +374,9 @@ function startDriveSimulator() {
 
     isSimulating = true;
     simIndex = 0;
-    document.getElementById('gpsHudBar').style.display = 'flex';
-    document.getElementById('hudGpsStatus').innerText = "Drive Sim (Active)";
+    showGpsHud();
+    const statusEl = document.getElementById('hudGpsStatus');
+    if (statusEl) statusEl.innerText = "Drive Sim (Active)";
     
     const simBtn = document.getElementById('btnDriveSim');
     if (simBtn) {
@@ -351,11 +417,15 @@ function stopDriveSimulator() {
         simulatorInterval = null;
     }
     isSimulating = false;
-    document.getElementById('hudGpsStatus').innerText = "Sim Stopped";
+    const statusEl = document.getElementById('hudGpsStatus');
+    if (statusEl) statusEl.innerText = "Sim Stopped";
     const simBtn = document.getElementById('btnDriveSim');
     if (simBtn) {
         simBtn.innerHTML = '🚗 Simulate GPS Drive';
         simBtn.style.background = '';
+    }
+    if (!isGpsActive) {
+        hideGpsHud();
     }
 }
 
@@ -394,3 +464,10 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
 }
+
+window.hideGpsHud = hideGpsHud;
+window.showGpsHud = showGpsHud;
+window.closeGpsHud = closeGpsHud;
+window.toggleGpsTracking = toggleGpsTracking;
+window.startRealtimeGps = startRealtimeGps;
+window.stopRealtimeGps = stopRealtimeGps;

@@ -48,7 +48,10 @@ NE_ROAD_NETWORK = [
 
     # Lower Assam Corridor
     {"u": "guwahati", "v": "barpeta", "distance_km": 95, "base_terrain": "floodplain_lowland", "highway": "NH-27", "elevation_gain": -20},
-    {"u": "barpeta", "v": "dhubri", "distance_km": 130, "base_terrain": "river_basin", "highway": "NH-17", "elevation_gain": -1}
+    {"u": "barpeta", "v": "dhubri", "distance_km": 130, "base_terrain": "river_basin", "highway": "NH-17", "elevation_gain": -1},
+    # Connecting Siliguri Corridor (Chicken's Neck) to Lower Assam & Sikkim
+    {"u": "siliguri", "v": "dhubri", "distance_km": 180, "base_terrain": "plains_corridor", "highway": "NH-17", "elevation_gain": -90},
+    {"u": "siliguri", "v": "barpeta", "distance_km": 270, "base_terrain": "plains_foothills", "highway": "NH-27 (Chicken's Neck)", "elevation_gain": -80}
 ]
 
 # Sample pre-existing crowdsourced incidents

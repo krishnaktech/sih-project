@@ -53,14 +53,14 @@ function initMap() {
         maxZoom: 19
     });
 
-    // Default to Dark layer
-    darkNavMap.addTo(map);
+    // Default to Light Street layer
+    osmStreet.addTo(map);
 
     baseLayers = {
-        "Dark Navigation": darkNavMap,
+        "Standard Street": osmStreet,
         "Terrain & Contours": topoMap,
         "Satellite Imagery": satelliteMap,
-        "Standard Street": osmStreet
+        "Dark Navigation": darkNavMap
     };
 
     // Add layer groups to map

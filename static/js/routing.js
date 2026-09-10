@@ -112,6 +112,9 @@ function renderRouteResults(data) {
     const resultsContainer = document.getElementById('routeResultsContainer');
     resultsContainer.innerHTML = '';
 
+    const originName = data.origin_name || (data.origin ? capitalize(data.origin) : 'Origin');
+    const destName = data.destination_name || (data.destination ? capitalize(data.destination) : 'Destination');
+
     // Clear existing map route lines & markers
     layerGroups.routes.clearLayers();
 
@@ -119,7 +122,9 @@ function renderRouteResults(data) {
     const direct = data.direct_route;
 
     if (!safest && !direct) {
-        resultsContainer.innerHTML = `<div class="p-3 text-red-400">No passable routes found between these locations due to extreme disasters.</div>`;
+        resultsContainer.innerHTML = `<div class="p-3" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 12px; color: #fca5a5;">
+            ⚠️ <strong>No Passable Road Route Found:</strong> Extreme landslides and flood surges currently block all road links between ${originName} and ${destName}. Please check road clearance SITREPs or wait for disaster clearance teams.
+        </div>`;
         return;
     }
 
@@ -131,9 +136,12 @@ function renderRouteResults(data) {
         ? direct.road_polyline
         : (direct ? direct.coordinates.map(c => [c.lat, c.lng]) : []);
 
+    let directPolyline = null;
+    let safePolyline = null;
+
     // 1. Draw Direct Route (if different from safe route)
-    if (direct && !data.is_same_route) {
-        const directPolyline = L.polyline(latlngsDirect, {
+    if (direct && !data.is_same_route && latlngsDirect.length > 0) {
+        directPolyline = L.polyline(latlngsDirect, {
             color: '#ef4444',
             weight: 5,
             opacity: 0.7,
@@ -151,14 +159,14 @@ function renderRouteResults(data) {
     }
 
     // 2. Draw Safest Route
-    if (safest) {
+    if (safest && latlngsSafe.length > 0) {
         const safeGlow = L.polyline(latlngsSafe, {
             color: '#059669',
             weight: 9,
             opacity: 0.35
         }).addTo(layerGroups.routes);
 
-        const safePolyline = L.polyline(latlngsSafe, {
+        safePolyline = L.polyline(latlngsSafe, {
             color: '#10b981',
             weight: 5,
             opacity: 0.95
@@ -166,16 +174,19 @@ function renderRouteResults(data) {
 
         safePolyline.bindPopup(`
             <div style="color: #0f172a;">
-                <strong style="color: #059669;">🛡️ Safest Recommended Route</strong>
+                <strong style="color: #059669;">✅ Safest Recommended Route</strong>
                 <div>Distance: ${safest.total_distance_km} km</div>
                 <div>Risk Factor: ${safest.composite_risk_score}%</div>
                 <div style="color: #047857; font-size: 11px; font-weight: bold;">✅ Lowest Flood & Landslide Exposure</div>
             </div>
         `);
+    }
 
-        // Add start and end pins
-        const startCity = safest.coordinates[0];
-        const endCity = safest.coordinates[safest.coordinates.length - 1];
+    // Add start and end pins
+    const activeRoute = safest || direct;
+    if (activeRoute && activeRoute.coordinates && activeRoute.coordinates.length > 0) {
+        const startCity = activeRoute.coordinates[0];
+        const endCity = activeRoute.coordinates[activeRoute.coordinates.length - 1];
 
         L.circleMarker([startCity.lat, startCity.lng], {
             radius: 7,
@@ -192,9 +203,12 @@ function renderRouteResults(data) {
             weight: 3,
             fillOpacity: 1
         }).addTo(layerGroups.routes).bindTooltip(`Destination: ${endCity.name}`);
+    }
 
-        // Fit map bounds to show route
-        map.fitBounds(safePolyline.getBounds(), { padding: [40, 40] });
+    // Fit map bounds to show route
+    const boundsPolyline = safePolyline || directPolyline;
+    if (boundsPolyline && map) {
+        map.fitBounds(boundsPolyline.getBounds(), { padding: [40, 40] });
     }
 
     // Render HTML Cards for the results
@@ -207,7 +221,7 @@ function renderRouteResults(data) {
             <div class="route-card safest">
                 <div class="route-header">
                     <span class="route-title">
-                        🛡️ Recommended Safe Path
+                        ✅ Recommended Safe Path
                     </span>
                     <span class="badge badge-safe">SAFEST</span>
                 </div>
@@ -281,7 +295,7 @@ function renderRouteResults(data) {
                     </div>
                     <div class="stat-item">
                         <div class="stat-label">Est. Time</div>
-                        <div class="stat-value" style="color: #fca5a5;">Delayed</div>
+                        <div class="stat-value" style="color: #fca5a5;">${direct.estimated_time_hours} hrs</div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-label">Risk Level</div>
@@ -312,6 +326,25 @@ function renderRouteResults(data) {
     }
 
     resultsContainer.innerHTML = html;
+
+    // Update Mobile Peek Card
+    const peekCard = document.getElementById('mobileRoutePeekCard');
+    const peekText = document.getElementById('routePeekText');
+    const activeRouteForPeek = safest || direct;
+    if (peekCard && peekText && activeRouteForPeek) {
+        const isMobile = window.innerWidth <= 768;
+        peekCard.style.display = isMobile ? 'flex' : 'none';
+        const riskColor = activeRouteForPeek.composite_risk_score < 30 ? '#34d399' : (activeRouteForPeek.composite_risk_score < 65 ? '#f59e0b' : '#ef4444');
+        peekText.innerHTML = `<strong>${originName} ➔ ${destName}:</strong> ${activeRouteForPeek.total_distance_km} km • ⏱️ <strong>${activeRouteForPeek.estimated_time_hours} hrs</strong> • <span style="color: ${riskColor}; font-weight: bold;">${activeRouteForPeek.composite_risk_score}% Risk</span>`;
+    }
+}
+
+function handleLocationSelectChange() {
+    const origin = document.getElementById('originSelect').value;
+    const dest = document.getElementById('destSelect').value;
+    if (origin && dest && origin !== dest) {
+        calculateRoute();
+    }
 }
 
 function capitalize(str) {

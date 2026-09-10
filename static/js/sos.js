@@ -1,4 +1,4 @@
-﻿// AapdaMarg NE - Emergency Complaint & Automated SOS Dispatch Controller
+// AapdaMarg NE - Emergency Complaint & Automated SOS Dispatch Controller
 
 let emergencyFacilities = [];
 let emergencyComplaints = [];
@@ -173,7 +173,7 @@ async function executeAutoSosDispatchNow() {
     const btn = document.getElementById("btnInstantSendNow");
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = "📡 BROADCASTING ALERT TO POLICE & HOSPITAL...";
+        btn.innerHTML = "🚨 BROADCASTING ALERT TO POLICE & HOSPITAL...";
     }
 
     // Play urgent siren
@@ -303,7 +303,7 @@ async function submitEmergencyComplaint(e) {
 
     const submitBtn = document.getElementById("btnSubmitSos");
     submitBtn.disabled = true;
-    submitBtn.innerHTML = "📡 BROADCASTING EMERGENCY ALERT TO NEAREST UNIT...";
+    submitBtn.innerHTML = "🚨 BROADCASTING EMERGENCY ALERT TO NEAREST UNIT...";
 
     playEmergencyTone(true);
 
@@ -436,22 +436,22 @@ function renderComplaintsList() {
                 <div class="complaint-header">
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 16px;">${icon}</span>
-                        <strong style="font-size: 12px; color: #f8fafc;">${natureFormatted}</strong>
+                        <strong style="font-size: 12px; color: #0f172a;">${natureFormatted}</strong>
                     </div>
                     <span class="dispatch-badge ${statusClass}">${statusClass.replace('_', ' ')}</span>
                 </div>
-                <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 4px;">
+                <div style="font-size: 11px; color: #334155; margin-bottom: 4px;">
                     📍 ${c.location_address || 'North East Location'}
                 </div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px; line-height: 1.3;">
+                <div style="font-size: 11px; color: #64748b; margin-bottom: 6px; line-height: 1.3;">
                     ${c.details || 'Emergency distress call logged.'}
                 </div>
-                <div style="background: rgba(15, 23, 42, 0.6); border-radius: 6px; padding: 6px 8px; font-size: 10.5px; border-left: 3px solid #ef4444;">
-                    <div><strong>Responding Station:</strong> <span style="color: #38bdf8;">${c.assigned_facility_name}</span> (${c.distance_km} km)</div>
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 8px; font-size: 10.5px; border-left: 3px solid #ef4444;">
+                    <div><strong>Responding Station:</strong> <span style="color: #0284c7;">${c.assigned_facility_name}</span> (${c.distance_km} km)</div>
                     <div><strong>Assigned Unit:</strong> ${c.assigned_unit}</div>
                     <div style="display: flex; justify-content: space-between; margin-top: 3px;">
-                        <span>ETA: <strong style="color: #34d399;">~${c.eta_minutes} mins</strong></span>
-                        <span style="color: #94a3b8;">Caller: ${c.caller_name}</span>
+                        <span>ETA: <strong style="color: #16a34a;">~${c.eta_minutes} mins</strong></span>
+                        <span style="color: #64748b;">Caller: ${c.caller_name}</span>
                     </div>
                 </div>
             </div>
@@ -490,10 +490,10 @@ function showSosDispatchReceipt(dispatchResult) {
     if (secondary && secBox) {
         secBox.style.display = "block";
         secBox.innerHTML = `
-            <div style="margin-top: 10px; padding: 10px; background: rgba(30, 41, 59, 0.7); border-radius: 8px; border-left: 3px solid #3b82f6;">
-                <div style="font-size: 11px; color: #60a5fa; font-weight: bold;">🚔 SECONDARY ESCORT UNIT ALERTED:</div>
-                <div style="font-size: 12px; font-weight: bold; color: white;">${secondary.station_name} (${secondary.distance_km} km)</div>
-                <div style="font-size: 10.5px; color: #cbd5e1;">${secondary.assigned_unit}</div>
+            <div style="margin-top: 10px; padding: 10px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd; border-left: 3px solid #0284c7;">
+                <div style="font-size: 11px; color: #0284c7; font-weight: bold;">🚔 SECONDARY ESCORT UNIT ALERTED:</div>
+                <div style="font-size: 12px; font-weight: bold; color: #0f172a;">${secondary.station_name} (${secondary.distance_km} km)</div>
+                <div style="font-size: 10.5px; color: #475569;">${secondary.assigned_unit}</div>
             </div>
         `;
     } else if (secBox) {

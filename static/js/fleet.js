@@ -192,26 +192,26 @@ async function loadFleetTracking() {
             // Card in Sidebar Fleet List
             if (container) {
                 container.innerHTML += `
-                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 4px solid ${isDelayed ? '#dc2626' : (isRerouted ? '#10b981' : '#0284c7')};">
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 4px solid ${isDelayed ? '#dc2626' : (isRerouted ? '#10b981' : '#0284c7')}; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                            <strong style="color: #38bdf8; font-size: 13px;">🚛 ${v.vehicle_id}</strong>
-                            <span style="font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 4px; ${isDelayed ? 'background: #7f1d1d; color: #fca5a5;' : (isRerouted ? 'background: #065f46; color: #6ee7b7;' : 'background: #075985; color: #bae6fd;')}">
+                            <strong style="color: #0284c7; font-size: 13px;">🚛 ${v.vehicle_id}</strong>
+                            <span style="font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 4px; ${isDelayed ? 'background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5;' : (isRerouted ? 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;' : 'background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;')}">
                                 ${v.status.toUpperCase()}
                             </span>
                         </div>
-                        <div style="font-size: 11.5px; color: #f8fafc; font-weight: 600; margin-bottom: 4px;">
+                        <div style="font-size: 11.5px; color: #0f172a; font-weight: 600; margin-bottom: 4px;">
                             ${cargoIcon} ${v.cargo_desc}
                         </div>
-                        <div style="font-size: 10.5px; color: #94a3b8; margin-bottom: 6px;">
+                        <div style="font-size: 10.5px; color: #64748b; margin-bottom: 6px;">
                             <span>${v.origin.toUpperCase()} ➔ ${v.destination.toUpperCase()}</span> • <span>ETA: <strong>${v.eta_hours} hrs</strong></span>
                         </div>
                         ${v.hazard_alert ? `
-                            <div style="background: rgba(220,38,38,0.15); border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; padding: 6px; font-size: 10.5px; color: #fca5a5; margin-bottom: 8px;">
+                            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 6px; font-size: 10.5px; color: #991b1b; margin-bottom: 8px;">
                                 ${v.hazard_alert}
                             </div>
                         ` : ''}
                         <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                            <button onclick="map.flyTo([${v.current_lat}, ${v.current_lng}], 12)" style="background: rgba(255,255,255,0.08); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer;">
+                            <button onclick="map.flyTo([${v.current_lat}, ${v.current_lng}], 12)" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer;">
                                 📍 Locate
                             </button>
                             ${isDelayed ? `
@@ -261,20 +261,20 @@ async function loadLogisticsAlerts() {
         if (!container) return;
 
         if (!data.alerts || data.alerts.length === 0) {
-            container.innerHTML = '<div class="p-3 text-gray-400">All regional transport corridors operational.</div>';
+            container.innerHTML = '<div class="p-3 text-gray-500">All regional transport corridors operational.</div>';
             return;
         }
 
         container.innerHTML = data.alerts.map(a => `
-            <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; margin-bottom: 8px; border-left: 4px solid ${a.severity === 'critical' ? '#dc2626' : '#f59e0b'};">
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 8px; border-left: 4px solid ${a.severity === 'critical' ? '#dc2626' : '#f59e0b'}; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
-                    <strong style="color: ${a.severity === 'critical' ? '#f87171' : '#fcd34d'}; font-size: 11.5px;">${a.title}</strong>
-                    <span style="font-size: 9.5px; font-weight: bold; background: ${a.severity === 'critical' ? '#7f1d1d' : '#78350f'}; color: white; padding: 1px 5px; border-radius: 3px;">
+                    <strong style="color: ${a.severity === 'critical' ? '#dc2626' : '#b45309'}; font-size: 11.5px;">${a.title}</strong>
+                    <span style="font-size: 9.5px; font-weight: bold; background: ${a.severity === 'critical' ? '#fee2e2' : '#fef3c7'}; color: ${a.severity === 'critical' ? '#b91c1c' : '#b45309'}; border: 1px solid ${a.severity === 'critical' ? '#fca5a5' : '#fcd34d'}; padding: 1px 5px; border-radius: 3px;">
                         ${a.severity.toUpperCase()}
                     </span>
                 </div>
-                <p style="font-size: 11px; color: #cbd5e1; margin-bottom: 4px; line-height: 1.3;">${a.message}</p>
-                <div style="font-size: 10px; color: #38bdf8; font-style: italic;">💡 ${a.suggested_action}</div>
+                <p style="font-size: 11px; color: #334155; margin-bottom: 4px; line-height: 1.3;">${a.message}</p>
+                <div style="font-size: 10px; color: #0284c7; font-style: italic;">💡 ${a.suggested_action}</div>
             </div>
         `).join('');
 
@@ -330,12 +330,12 @@ async function openCommandDashboard() {
         // 3. Corridor Status List
         const corridorContainer = document.getElementById('corridorHealthContainer');
         corridorContainer.innerHTML = data.corridor_health.map(c => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 11px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px;">
                 <div>
-                    <strong style="color: #f1f5f9;">${c.name}</strong>
-                    <div style="color: #94a3b8; font-size: 10px;">Threat Score: ${c.risk}%</div>
+                    <strong style="color: #0f172a;">${c.name}</strong>
+                    <div style="color: #64748b; font-size: 10px;">Threat Score: ${c.risk}%</div>
                 </div>
-                <span class="badge" style="background: ${c.risk > 70 ? '#7f1d1d' : (c.risk > 45 ? '#78350f' : '#065f46')}; color: white; font-size: 9.5px;">
+                <span class="badge" style="background: ${c.risk > 70 ? '#ef4444' : (c.risk > 45 ? '#d97706' : '#16a34a')}; color: white; font-size: 9.5px; font-weight: 700;">
                     ${c.status}
                 </span>
             </div>
@@ -350,8 +350,8 @@ async function openCommandDashboard() {
                 <td><strong>${v.vehicle_id}</strong></td>
                 <td>${v.cargo_type.replace(/_/g, ' ').toUpperCase()}</td>
                 <td>${v.origin.toUpperCase()} ➔ ${v.destination.toUpperCase()}</td>
-                <td>${v.driver_name} (<a href="tel:${v.driver_phone}" style="color: #38bdf8;">${v.driver_phone}</a>)</td>
-                <td><span class="badge" style="background: ${v.status === 'delayed' ? '#7f1d1d' : (v.status === 'rerouted' ? '#065f46' : '#075985')}; color: white;">${v.status.toUpperCase()}</span></td>
+                <td>${v.driver_name} (<a href="tel:${v.driver_phone}" style="color: #0284c7; font-weight: 600;">${v.driver_phone}</a>)</td>
+                <td><span class="badge" style="background: ${v.status === 'delayed' ? '#ef4444' : (v.status === 'rerouted' ? '#16a34a' : '#0284c7')}; color: white; font-weight: 700;">${v.status.toUpperCase()}</span></td>
                 <td>${v.eta_hours} hrs</td>
                 <td>
                     ${v.status === 'delayed' ? `<button onclick="rerouteFleetTruck('${v.vehicle_id}')" class="btn-reroute">Reroute</button>` : `<span style="color: #10b981;">✓ Optimal</span>`}

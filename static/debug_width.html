@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script>
+window.addEventListener('load', () => {
+    fetch('http://127.0.0.1:8000/api/nodes').then(() => {
+        const info = {
+            innerWidth: window.innerWidth,
+            outerWidth: window.outerWidth,
+            sidebarWidth: document.getElementById('sidebarDrawer') ? document.getElementById('sidebarDrawer').offsetWidth : 0,
+            routeBoxWidth: document.querySelector('.route-box') ? document.querySelector('.route-box').offsetWidth : 0,
+            originGroupWidth: document.querySelector('.form-group') ? document.querySelector('.form-group').offsetWidth : 0,
+        };
+        const el = document.createElement('div');
+        el.id = 'debugInfo';
+        el.textContent = JSON.stringify(info);
+        document.body.appendChild(el);
+    });
+});
+</script>
+</head>
+<body>
+</body>
+</html>

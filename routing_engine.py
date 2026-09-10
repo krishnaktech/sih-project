@@ -71,6 +71,82 @@ class NorthEastRoutingEngine:
                 elevation_gain=edge["elevation_gain"]
             )
 
+    def calculate_vehicle_speed(self, base_terrain: str, elev_gain: float, risk_info: dict, vehicle_mode: str) -> float:
+        terrain_lower = (base_terrain or "plains").lower()
+        is_mountainous = any(t in terrain_lower for t in ["himalayan", "steep", "rugged", "hilly", "ridge", "landslide"])
+        is_flood_terrain = any(t in terrain_lower for t in ["floodplain", "river", "basin", "extreme_rain"])
+        
+        score = float(risk_info.get("total_risk", 0))
+        elev_gain = float(elev_gain or 0)
+        
+        if vehicle_mode == "4x4":
+            # 4x4 / SUV: High ground clearance, all-wheel drive, high torque
+            # Swift on mountain highways and resilient against moderate road damage
+            if is_mountainous:
+                base_speed = 54.0
+            elif is_flood_terrain:
+                base_speed = 60.0
+            else:
+                base_speed = 74.0
+                
+            climb_penalty = (elev_gain / 100.0) * 0.008
+            base_speed = base_speed * max(0.75, 1.0 - climb_penalty)
+            
+            risk_penalty = score / 160.0
+            speed = base_speed * max(0.55, 1.0 - risk_penalty)
+            return max(24.0, speed)
+
+        elif vehicle_mode == "emergency_convoy":
+            # NDRF Truck / Heavy Logistics Convoy:
+            # 10-16 ton vehicles, slower on tight hairpin turns and steep mountain gradients
+            if is_mountainous:
+                base_speed = 32.0
+            elif is_flood_terrain:
+                base_speed = 38.0
+            else:
+                base_speed = 50.0
+                
+            climb_penalty = (elev_gain / 100.0) * 0.022
+            base_speed = base_speed * max(0.60, 1.0 - climb_penalty)
+            
+            risk_penalty = score / 140.0
+            speed = base_speed * max(0.45, 1.0 - risk_penalty)
+            return max(16.0, speed)
+
+        elif vehicle_mode == "foot":
+            # Foot Patrol: Rescue squad marching on foot with emergency equipment
+            # Human walking pace in mountain/monsoon terrain: ~3.0 - 4.8 km/h
+            if is_mountainous:
+                base_speed = 3.6
+            elif is_flood_terrain:
+                base_speed = 3.8
+            else:
+                base_speed = 4.8
+                
+            climb_penalty = (elev_gain / 100.0) * 0.035
+            base_speed = base_speed * max(0.60, 1.0 - climb_penalty)
+            
+            risk_penalty = score / 150.0
+            speed = base_speed * max(0.50, 1.0 - risk_penalty)
+            return max(1.8, speed)
+
+        else: # "standard" (Car / Sedan)
+            # Standard 2WD passenger car:
+            # Lower clearance, vulnerable to underbody damage, slower on broken asphalt & steep ghats
+            if is_mountainous:
+                base_speed = 42.0
+            elif is_flood_terrain:
+                base_speed = 48.0
+            else:
+                base_speed = 65.0
+                
+            climb_penalty = (elev_gain / 100.0) * 0.015
+            base_speed = base_speed * max(0.70, 1.0 - climb_penalty)
+            
+            risk_penalty = score / 125.0
+            speed = base_speed * max(0.35, 1.0 - risk_penalty)
+            return max(14.0, speed)
+
     def calculate_edge_risk(self, u: str, v: str, incidents: list, structures: list, weather_data: dict = None):
         u_data = NE_CITIES.get(u, {})
         v_data = NE_CITIES.get(v, {})
@@ -288,6 +364,7 @@ class NorthEastRoutingEngine:
             coordinates = []
             all_hazards = []
             road_polyline = []
+            total_travel_time_hours = 0.0
 
             for i in range(len(path) - 1):
                 u, v = path[i], path[i+1]
@@ -319,8 +396,21 @@ class NorthEastRoutingEngine:
 
                 dist = edge_data["distance"]
                 risk_info = edge_data["risk_info"]
+                base_terrain = edge_data.get("base_terrain", "plains")
+                elev_gain = edge_data.get("elevation_gain", 0)
+
                 total_dist += dist
                 weighted_risk += dist * risk_info["total_risk"]
+
+                # Realistic segment speed & travel time for this vehicle mode
+                seg_speed = self.calculate_vehicle_speed(
+                    base_terrain=base_terrain,
+                    elev_gain=elev_gain,
+                    risk_info=risk_info,
+                    vehicle_mode=vehicle_mode
+                )
+                seg_time = dist / seg_speed
+                total_travel_time_hours += seg_time
 
                 for h in risk_info["active_hazards"]:
                     if h not in all_hazards:
@@ -337,32 +427,18 @@ class NorthEastRoutingEngine:
                     "to_name": v_city["name"],
                     "highway": edge_data.get("highway", "Highway"),
                     "distance_km": dist,
-                    "elevation_gain": edge_data.get("elevation_gain", 0),
+                    "elevation_gain": elev_gain,
                     "risk_score": score,
                     "risk_badge": badge,
                     "flood_risk": risk_info["flood_risk"],
                     "landslide_risk": risk_info["landslide_risk"],
                     "structure_risk": risk_info["structure_risk"],
-                    "hazards": risk_info["active_hazards"]
+                    "hazards": risk_info["active_hazards"],
+                    "speed_kmh": round(seg_speed, 1),
+                    "segment_time_hours": round(seg_time, 2)
                 })
 
             avg_risk = round(weighted_risk / total_dist, 1) if total_dist > 0 else 0
-            
-            # Estimated travel time in hours (accounting for mountain road speeds and flood delays)
-            # Base avg speed 45 km/h, reduced by risk penalty
-            speed_kmh = max(18.0, 45.0 * (1.0 - (avg_risk / 150.0)))
-            travel_time_hours = round(total_dist / speed_kmh, 1)
-
-            # Overall recommendation
-            if avg_risk < 30:
-                verdict = "Safe & Clear Route"
-                verdict_color = "green"
-            elif avg_risk < 65:
-                verdict = "Caution: Moderate Road & Water Hazards"
-                verdict_color = "amber"
-            else:
-                verdict = "HIGH RISK / BLOCKED SECTORS: Extreme Caution Required"
-                verdict_color = "red"
 
             # If GPS origin exists, prepend it to road_polyline and coordinates
             if user_gps_origin:
@@ -375,11 +451,13 @@ class NorthEastRoutingEngine:
                     "name": "📍 Current GPS Location",
                     "node_id": "current_gps"
                 })
-                # Add connector distance
+                # Add connector distance and connector time
                 first_node = NE_CITIES.get(path[0])
                 if first_node:
                     conn_dist = round(haversine_distance(gps_lat, gps_lng, first_node["lat"], first_node["lng"]), 1)
+                    conn_speed = self.calculate_vehicle_speed("plains", 0, {"total_risk": 10}, vehicle_mode)
                     total_dist = round(total_dist + conn_dist, 1)
+                    total_travel_time_hours += (conn_dist / conn_speed)
 
             # If GPS dest exists, append it
             if user_gps_dest:
@@ -392,6 +470,25 @@ class NorthEastRoutingEngine:
                     "name": "📍 Custom GPS Destination",
                     "node_id": "custom_dest"
                 })
+                last_node = NE_CITIES.get(path[-1])
+                if last_node:
+                    conn_dist = round(haversine_distance(dest_lat, dest_lng, last_node["lat"], last_node["lng"]), 1)
+                    conn_speed = self.calculate_vehicle_speed("plains", 0, {"total_risk": 10}, vehicle_mode)
+                    total_dist = round(total_dist + conn_dist, 1)
+                    total_travel_time_hours += (conn_dist / conn_speed)
+
+            travel_time_hours = round(total_travel_time_hours, 1)
+
+            # Overall recommendation
+            if avg_risk < 30:
+                verdict = "Safe & Clear Route"
+                verdict_color = "green"
+            elif avg_risk < 65:
+                verdict = "Caution: Moderate Road & Water Hazards"
+                verdict_color = "amber"
+            else:
+                verdict = "HIGH RISK / BLOCKED SECTORS: Extreme Caution Required"
+                verdict_color = "red"
 
             return {
                 "route_type": route_type,
