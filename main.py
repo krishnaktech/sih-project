@@ -4,7 +4,7 @@ import shutil
 import json
 import urllib.request
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,7 +17,7 @@ from weather_service import get_all_weather, get_live_weather, get_disaster_tick
 import seed_data
 
 app = FastAPI(
-    title="Route Rakshak - North East India Disaster Resilience & Navigation",
+    title="Aapda Marg - North East India Disaster Resilience & Navigation",
     description="Adaptive route navigation, flood and landslide risk assessment, real-time weather alerts, and crowdsourced hazard reporting for North East India.",
     version="1.0.0"
 )
@@ -76,7 +76,7 @@ def read_root():
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
         return response
-    return {"message": "Route Rakshak API is running. index.html is being initialized."}
+    return {"message": "Aapda Marg API is running. index.html is being initialized."}
 
 @app.get("/download/apk")
 @app.get("/AapdaMarg-NE.apk")
@@ -241,6 +241,83 @@ def calculate_route(req: RouteRequest):
     direct_time = result.get('direct_route', {}).get('estimated_time_hours')
     print(f"DEBUG_ROUTE RESULT: safe_time={safe_time} hrs, direct_time={direct_time} hrs", flush=True)
     return result
+
+# ----------------- User Real-Time Network Geolocation Fallback -----------------
+
+@app.get("/api/user-location")
+def get_user_current_location(request: Request):
+    # 1. Cloudflare edge geolocation headers (passed automatically over trycloudflare tunnel)
+    cf_lat = request.headers.get("cf-iplatitude")
+    cf_lng = request.headers.get("cf-iplongitude")
+    cf_city = request.headers.get("cf-ipcity")
+    cf_country = request.headers.get("cf-ipcountry")
+    if cf_lat and cf_lng:
+        try:
+            lat = float(cf_lat)
+            lng = float(cf_lng)
+            loc_name = f"{cf_city}, {cf_country}" if cf_city else "Current Network Location"
+            return {
+                "success": True,
+                "lat": lat,
+                "lng": lng,
+                "name": loc_name,
+                "source": "cloudflare_edge"
+            }
+        except Exception:
+            pass
+
+    # 2. IP lookup based on client IP
+    client_ip = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")
+    if client_ip and "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    
+    if client_ip and client_ip not in ["127.0.0.1", "localhost", "::1"]:
+        try:
+            req = urllib.request.Request(
+                f"http://ip-api.com/json/{client_ip}?fields=status,message,country,regionName,city,lat,lon",
+                headers={"User-Agent": "AapdaMargServer/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                data = json.loads(resp.read().decode())
+                if data.get("status") == "success" and "lat" in data and "lon" in data:
+                    city = data.get("city") or data.get("regionName") or "User Location"
+                    return {
+                        "success": True,
+                        "lat": float(data["lat"]),
+                        "lng": float(data["lon"]),
+                        "name": f"{city}, {data.get('country', 'India')}",
+                        "source": "ip_telemetry"
+                    }
+        except Exception as e:
+            print("IP geolocation lookup error:", e)
+
+    # 3. Server egress IP lookup
+    try:
+        req = urllib.request.Request(
+            "http://ip-api.com/json/?fields=status,message,country,regionName,city,lat,lon",
+            headers={"User-Agent": "AapdaMargServer/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
+            data = json.loads(resp.read().decode())
+            if data.get("status") == "success" and "lat" in data and "lon" in data:
+                city = data.get("city") or data.get("regionName") or "User Location"
+                return {
+                    "success": True,
+                    "lat": float(data["lat"]),
+                    "lng": float(data["lon"]),
+                    "name": f"{city}, {data.get('country', 'India')}",
+                    "source": "public_egress"
+                }
+    except Exception:
+        pass
+
+    return {
+        "success": False,
+        "lat": 26.1445,
+        "lng": 91.7362,
+        "name": "Guwahati Regional Center",
+        "source": "default"
+    }
 
 # ----------------- Reverse Geocoding (Real Location like Google Maps) -----------------
 

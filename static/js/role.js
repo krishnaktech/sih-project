@@ -27,12 +27,12 @@ const ROLE_CONFIGS = {
     },
     general_public: {
         id: 'general_public',
-        name: 'General Public',
-        title: 'Citizen / Guest Access',
-        icon: '👤',
+        name: 'Fleet Driver / Guest',
+        title: 'Fleet Driver / Guest Access',
+        icon: '🚛',
         badgeClass: 'role-badge-public',
         defaultTab: 'tabRoute',
-        description: 'Citizen user accessing disaster-avoiding safe route navigation, 1-tap emergency SOS, relief camps & amenities.'
+        description: 'Fleet driver or guest user accessing disaster-avoiding safe route navigation, live convoy guidance, 1-tap emergency SOS, relief camps & amenities.'
     }
 };
 
@@ -41,9 +41,10 @@ let currentOfficerId = localStorage.getItem('aapdamarg_officer_id') || '';
 let selectedLoginRole = USER_ROLES.HEADQUARTERS;
 
 function isHeadquartersUser() {
-    const r = currentRole || localStorage.getItem('aapdamarg_user_role');
+    const r = currentRole || localStorage.getItem('aapdamarg_user_role') || localStorage.getItem('route_rakshak_role');
     return r === USER_ROLES.HEADQUARTERS || r === 'headquarters';
 }
+window.isHeadquartersUser = isHeadquartersUser;
 
 // Field Officer Deployment Profile (Configured after officer login)
 const DEFAULT_OFFICER_PROFILE = {
@@ -283,23 +284,23 @@ function setLoginRole(roleId) {
         if (demoHint) demoHint.innerHTML = 'Authorized personnel only';
     } else { // general_public
         if (roleBadge) {
-            roleBadge.innerText = 'Citizen Access';
+            roleBadge.innerText = 'Fleet Driver / Guest';
             roleBadge.style.background = '#ecfdf5';
             roleBadge.style.color = '#047857';
             roleBadge.style.borderColor = '#a7f3d0';
         }
         if (idInput) {
-            idInput.placeholder = 'Mobile number or Citizen ID (Optional)';
+            idInput.placeholder = 'Vehicle Convoy ID, Driver ID or Phone (Optional)';
             idInput.required = false;
             idInput.value = '';
         }
         if (pwdInput) {
             pwdInput.required = false;
-            pwdInput.placeholder = 'Password (Optional for Public)';
+            pwdInput.placeholder = 'Password (Optional for Driver / Guest)';
             pwdInput.value = '';
         }
-        if (submitBtnText) submitBtnText.innerText = 'Continue as Public';
-        if (demoHint) demoHint.innerHTML = 'Public access (Password optional)';
+        if (submitBtnText) submitBtnText.innerText = 'Continue as Fleet Driver / Guest';
+        if (demoHint) demoHint.innerHTML = 'Driver / Guest access (Password optional)';
     }
 }
 
@@ -524,7 +525,7 @@ function applyRoleInterface(roleId) {
         } else if (roleId === USER_ROLES.FIELD_OFFICER) {
             menuCurrentRole.innerText = '⭐ Logged In: Field Officer';
         } else {
-            menuCurrentRole.innerText = '👤 Guest Mode (Citizen Access)';
+            menuCurrentRole.innerText = '🚛 Fleet Driver / Guest Mode';
         }
     }
 

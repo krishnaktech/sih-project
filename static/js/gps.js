@@ -75,17 +75,53 @@ function initGpsSubsystem() {
 }
 
 function requestInitialLocation() {
+    // 1. Fast cached or low-accuracy position (instant if browser knows device position)
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 handleGpsUpdate(pos);
             },
             (err) => {
-                console.log("Initial geolocation notice:", err.message);
+                console.log("Initial cached geolocation notice:", err.message);
             },
-            { enableHighAccuracy: true, timeout: 6000 }
+            { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 }
+        );
+
+        // 2. High-accuracy real-time GPS acquisition
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                handleGpsUpdate(pos);
+            },
+            (err) => {
+                console.log("Initial high-accuracy geolocation notice:", err.message);
+            },
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
         );
     }
+
+    // 3. Parallel query to server network geolocation (/api/user-location)
+    // Ensures real location (Indore / Cloudflare edge IP) is immediately locked even before browser GPS prompt
+    fetch("/api/user-location")
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.success && data.lat && data.lng) {
+                if (!window.currentGpsCoords) {
+                    window.currentGpsCoords = {
+                        lat: parseFloat(Number(data.lat).toFixed(4)),
+                        lng: parseFloat(Number(data.lng).toFixed(4)),
+                        accuracy: 100,
+                        speed: "0",
+                        altitude: "--",
+                        heading: null
+                    };
+                    window.currentGpsPos = { lat: window.currentGpsCoords.lat, lng: window.currentGpsCoords.lng };
+                    if (typeof renderGpsMarkerOnMap === 'function' && !userGpsMarker) {
+                        renderGpsMarkerOnMap(window.currentGpsCoords.lat, window.currentGpsCoords.lng, 100, null);
+                    }
+                }
+            }
+        })
+        .catch(e => console.log("Init user-location note:", e));
 }
 
 function toggleGpsTracking() {
@@ -164,6 +200,8 @@ function handleGpsUpdate(pos) {
     const heading = pos.coords.heading;
 
     currentGpsCoords = { lat, lng, accuracy, speed, heading, altitude };
+    window.currentGpsCoords = currentGpsCoords;
+    window.currentGpsPos = { lat, lng };
     renderGpsMarkerOnMap(lat, lng, accuracy, heading);
     updateGpsHud(lat, lng, speed, altitude, accuracy);
     evaluateProximityThreats(lat, lng);
@@ -213,6 +251,7 @@ function renderGpsMarkerOnMap(lat, lng, accuracy, heading) {
     } else {
         userGpsMarker.setLatLng([lat, lng]);
     }
+    window.userGpsMarker = userGpsMarker;
 }
 
 function updateGpsHud(lat, lng, speed, altitude, accuracy) {

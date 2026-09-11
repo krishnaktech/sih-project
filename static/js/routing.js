@@ -327,11 +327,18 @@ function updateCoordMapMarker(type, lat, lng, title, address) {
             }
         });
 
-        if (isStart) startCoordMarker = marker;
-        else endCoordMarker = marker;
+        if (isStart) {
+            startCoordMarker = marker;
+            window.startCoordMarker = marker;
+        } else {
+            endCoordMarker = marker;
+            window.endCoordMarker = marker;
+        }
     } else {
         marker.setLatLng([lat, lng]);
         marker.setPopupContent(popupContent);
+        if (isStart) window.startCoordMarker = marker;
+        else window.endCoordMarker = marker;
     }
 }
 
@@ -339,9 +346,11 @@ function removeCoordMapMarker(type) {
     if (type === 'start' && startCoordMarker) {
         if (window.map) window.map.removeLayer(startCoordMarker);
         startCoordMarker = null;
+        window.startCoordMarker = null;
     } else if (type === 'end' && endCoordMarker) {
         if (window.map) window.map.removeLayer(endCoordMarker);
         endCoordMarker = null;
+        window.endCoordMarker = null;
     }
 }
 
