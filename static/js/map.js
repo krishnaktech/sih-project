@@ -25,6 +25,8 @@ function initMap() {
         minZoom: 6,
         maxZoom: 16
     });
+    window.map = map;
+    window.layerGroups = layerGroups;
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -73,8 +75,11 @@ function initMap() {
     layerGroups.facilities.addTo(map);
     layerGroups.sosIncidents.addTo(map);
 
-    // Map click handler (for photo/incident reporting & SOS location picker)
+    // Map click handler (for coordinate routing picker, photo/incident reporting & SOS location picker)
     map.on('click', function(e) {
+        if (typeof handleMapClickForCoordPicker === 'function' && handleMapClickForCoordPicker(e.latlng.lat, e.latlng.lng)) {
+            return;
+        }
         if (pickingLocation) {
             setPickedLocation(e.latlng.lat, e.latlng.lng);
         } else if (typeof handleMapClickForSos === 'function') {
@@ -217,6 +222,13 @@ function addIncidentMarker(inc) {
                     👍 <span class="upvote-count">${inc.upvotes || 1}</span>
                 </button>
             </div>
+            ${(typeof isHeadquartersUser === 'function' ? isHeadquartersUser() : (localStorage.getItem('aapdamarg_user_role') === 'headquarters')) ? `
+                <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #fca5a5; display: flex; justify-content: flex-end;">
+                    <button onclick="deleteHazardReport(${inc.id}, '${escapeQuotes(inc.title)}')" style="background: #fef2f2; color: #dc2626; border: 1px solid #f87171; border-radius: 4px; padding: 3px 8px; font-size: 10.5px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;" title="Authorized Headquarters Action: Remove Hazard">
+                        🗑️ Remove Hazard (HQ)
+                    </button>
+                </div>
+            ` : ''}
         </div>
     `);
 

@@ -6,6 +6,7 @@ let sosBeaconMarker = null;
 let sosDispatchRouteLine = null;
 let currentServiceType = "ambulance"; // 'police', 'ambulance', 'both'
 let pickingSosLocation = false;
+let currentEmergencyInfo = null;
 
 // Auto-SOS state
 let instantCountdownTimer = null;
@@ -70,6 +71,39 @@ function playEmergencyTone(isSiren = false) {
     }
 }
 
+// Predefined strategic Northeast regional corridor sectors for random emergency placement
+const NE_REGIONAL_SECTORS = [
+    { name: "NH-6 Sonapur Tunnel Corridor, East Jaintia Hills, Meghalaya", lat: 25.1090, lng: 92.3620 },
+    { name: "NH-10 Teesta River Gorge, Kalimpong - Sikkim Lifeline", lat: 27.0500, lng: 88.4600 },
+    { name: "NH-37 Kaziranga Floodplain Sector, Golaghat, Assam", lat: 26.5800, lng: 93.1700 },
+    { name: "NH-27 Lumding - Haflong Mountain Pass, Dima Hasao, Assam", lat: 25.1700, lng: 93.0200 },
+    { name: "NH-6 Ratacherra Border Checkpost, Meghalaya-Assam Border", lat: 24.9800, lng: 92.4800 },
+    { name: "Barak Valley Arterial Corridor, Silchar, Assam", lat: 24.8300, lng: 92.7800 },
+    { name: "Shillong Bypass - Umiam Sector, Ri-Bhoi, Meghalaya", lat: 25.6800, lng: 91.9200 },
+    { name: "NH-29 Dimapur - Kohima Hill Highway, Nagaland", lat: 25.7500, lng: 93.8500 },
+    { name: "NH-13 Bhalukpong - Bomdila Corridor, West Kameng, Arunachal Pradesh", lat: 27.1200, lng: 92.5400 },
+    { name: "Guwahati Metropolitan Highway - Jalukbari, Kamrup, Assam", lat: 26.1500, lng: 91.6600 },
+    { name: "Jowai - Amlarem - Dawki Border Route, West Jaintia Hills, Meghalaya", lat: 25.3200, lng: 92.0800 },
+    { name: "NH-2 Imphal - Senapati Hill Route, Manipur", lat: 25.1200, lng: 93.9800 },
+    { name: "NH-306 Kolasib - Vairengte Lifeline, Mizoram", lat: 24.2300, lng: 92.6800 },
+    { name: "NH-8 Ambassa - Kumarghat Highway, Tripura", lat: 23.9200, lng: 91.8500 },
+    { name: "Majuli River Island Approach, Jorhat, Assam", lat: 26.9500, lng: 94.2000 },
+    { name: "Cherrapunji - Sohra Escarpment Sector, East Khasi Hills, Meghalaya", lat: 25.2800, lng: 91.7300 },
+    { name: "Tezpur Brahmaputra Corridor (Kolia Bhomora), Sonitpur, Assam", lat: 26.6000, lng: 92.8500 },
+    { name: "Tura - Garobadha Highway, West Garo Hills, Meghalaya", lat: 25.5200, lng: 90.1500 }
+];
+
+function getRandomNortheastLocation() {
+    const loc = NE_REGIONAL_SECTORS[Math.floor(Math.random() * NE_REGIONAL_SECTORS.length)];
+    const jitterLat = (Math.random() - 0.5) * 0.03;
+    const jitterLng = (Math.random() - 0.5) * 0.03;
+    return {
+        name: loc.name,
+        lat: parseFloat((loc.lat + jitterLat).toFixed(4)),
+        lng: parseFloat((loc.lng + jitterLng).toFixed(4))
+    };
+}
+
 // -------------------------------------------------------------
 // 1. AUTOMATIC LOCATION ACCESS & 1-TOUCH INSTANT SOS DISPATCH
 // -------------------------------------------------------------
@@ -84,46 +118,94 @@ async function triggerInstantAutoSos() {
     // Reset UI
     instantCountdownSeconds = 4;
     document.getElementById("instantCountdownNum").innerText = instantCountdownSeconds;
-    document.getElementById("instantGpsStatusText").innerText = "Accessing Live GPS Satellite Telemetry...";
-    document.getElementById("instantGpsBadge").style.display = "none";
-    document.getElementById("instantStationGrid").style.display = "none";
     document.getElementById("btnInstantSendNow").innerText = "⚡ TRANSMIT ALERT NOW (1-CLICK)";
     document.getElementById("btnInstantSendNow").disabled = false;
 
-    // 1. Immediately access location
-    acquireLiveLocation((coords) => {
-        autoDetectedCoords = coords;
-        document.getElementById("instantGpsCoords").innerText = `${coords.lat.toFixed(4)}°N, ${coords.lng.toFixed(4)}°E`;
-        document.getElementById("instantGpsBadge").style.display = "inline-flex";
-        document.getElementById("instantGpsStatusText").innerText = "✓ High-Accuracy GPS Signal Locked!";
+    // Select a random position in the Northeast region
+    const randomPos = getRandomNortheastLocation();
+    autoDetectedCoords = randomPos;
+    window.autoDetectedCoords = randomPos;
 
-        // Find nearest facilities locally for instant preview
-        let nearestHosp = null, minHospDist = Infinity;
-        let nearestPol = null, minPolDist = Infinity;
+    document.getElementById("instantGpsCoords").innerText = `${randomPos.lat.toFixed(4)}°N, ${randomPos.lng.toFixed(4)}°E`;
+    document.getElementById("instantGpsBadge").style.display = "inline-flex";
+    document.getElementById("instantGpsStatusText").innerText = `✓ Northeast Location: ${randomPos.name}`;
 
-        emergencyFacilities.forEach(f => {
-            const dist = calcGeoDistance(coords.lat, coords.lng, f.latitude, f.longitude);
-            if (f.facility_type === "hospital_ambulance" && dist < minHospDist) {
-                minHospDist = dist;
-                nearestHosp = f;
-            } else if (f.facility_type === "police_station" && dist < minPolDist) {
-                minPolDist = dist;
-                nearestPol = f;
-            }
+    // Mark random Northeast location on map with emergency symbol
+    if (layerGroups && layerGroups.sosIncidents) {
+        layerGroups.sosIncidents.clearLayers();
+        const emergencySymbolIcon = L.divIcon({
+            className: "sos-emergency-symbol-marker",
+            html: '<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:20px;line-height:1;">🚨</span>',
+            iconSize: [38, 38],
+            iconAnchor: [19, 19]
         });
+        sosBeaconMarker = L.marker([randomPos.lat, randomPos.lng], {
+            icon: emergencySymbolIcon,
+            title: `Emergency Incident: ${randomPos.name}`
+        });
+        sosBeaconMarker.addTo(layerGroups.sosIncidents);
+        map.setView([randomPos.lat, randomPos.lng], 12);
+    }
 
-        if (nearestHosp) {
-            document.getElementById("instantNearHospital").innerText = nearestHosp.name;
-            const eta = Math.max(5, Math.round((minHospDist / 40.0) * 60) + 2);
-            document.getElementById("instantNearHospitalDist").innerText = `${minHospDist} km (ETA ~${eta} mins)`;
-        }
-        if (nearestPol) {
-            document.getElementById("instantNearPolice").innerText = nearestPol.name;
-            document.getElementById("instantNearPoliceDist").innerText = `${minPolDist} km`;
-        }
+    // Find nearest facilities locally for instant preview
+    let nearestHosp = null, minHospDist = Infinity;
+    let nearestPol = null, minPolDist = Infinity;
 
-        document.getElementById("instantStationGrid").style.display = "grid";
+    emergencyFacilities.forEach(f => {
+        const dist = calcGeoDistance(randomPos.lat, randomPos.lng, f.latitude, f.longitude);
+        if (f.facility_type === "hospital_ambulance" && dist < minHospDist) {
+            minHospDist = dist;
+            nearestHosp = f;
+        } else if (f.facility_type === "police_station" && dist < minPolDist) {
+            minPolDist = dist;
+            nearestPol = f;
+        }
     });
+
+    if (nearestHosp) {
+        document.getElementById("instantNearHospital").innerText = nearestHosp.name;
+        const eta = Math.max(5, Math.round((minHospDist / 40.0) * 60) + 2);
+        document.getElementById("instantNearHospitalDist").innerText = `${minHospDist} km (ETA ~${eta} mins)`;
+    }
+    if (nearestPol) {
+        document.getElementById("instantNearPolice").innerText = nearestPol.name;
+        document.getElementById("instantNearPoliceDist").innerText = `${minPolDist} km`;
+    }
+
+    document.getElementById("instantStationGrid").style.display = "grid";
+
+    // Set active emergency info for interactive popup inspection
+    currentEmergencyInfo = {
+        ticketId: "DISTRESS-ALERT",
+        locationAddress: randomPos.name,
+        lat: randomPos.lat,
+        lng: randomPos.lng,
+        assignedUnit: nearestHosp ? `108 ALS Ambulance (${nearestHosp.nodal_officer || 'Emergency Team'})` : "State Rapid Response Patrol",
+        stationName: nearestHosp ? nearestHosp.name : (nearestPol ? nearestPol.name : "Regional Disaster Command"),
+        distanceKm: nearestHosp ? minHospDist : (nearestPol ? minPolDist : 12.4),
+        etaMinutes: nearestHosp ? Math.max(5, Math.round((minHospDist / 40.0) * 60) + 2) : 15,
+        emergencyLine: nearestHosp ? nearestHosp.emergency_line : (nearestPol ? nearestPol.emergency_line : "112"),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
+        complaintId: null
+    };
+
+    if (sosBeaconMarker) {
+        window.sosBeaconMarker = sosBeaconMarker;
+        sosBeaconMarker.bindPopup(createEmergencyMarkerPopupHtml(currentEmergencyInfo), {
+            maxWidth: 320,
+            minWidth: 270,
+            className: 'sos-leaflet-popup'
+        });
+        sosBeaconMarker.on('click', function(e) {
+            this.setPopupContent(createEmergencyMarkerPopupHtml(currentEmergencyInfo));
+            this.openPopup();
+        });
+    }
+
+    // Toggle instant HQ removal container if Headquarters user
+    const isHqUser = (typeof isHeadquartersUser === 'function' ? isHeadquartersUser() : (localStorage.getItem('aapdamarg_user_role') === 'headquarters'));
+    const hqBox = document.getElementById("instantHqRemoveContainer");
+    if (hqBox) hqBox.style.display = isHqUser ? "block" : "none";
 
     // 2. Start automated countdown to send alert
     if (instantCountdownTimer) clearInterval(instantCountdownTimer);
@@ -179,14 +261,14 @@ async function executeAutoSosDispatchNow() {
     // Play urgent siren
     playEmergencyTone(true);
 
-    const coords = autoDetectedCoords || (window.currentGpsPos ? window.currentGpsPos : map.getCenter());
+    const coords = autoDetectedCoords || getRandomNortheastLocation();
 
     const payload = {
         complaint_type: "both",
         emergency_nature: "immediate_danger",
         caller_name: "Emergency Citizen (Auto-GPS)",
         caller_phone: "Auto-Distress Telemetry (112)",
-        location_address: `Live GPS Satellite Coordinates (${coords.lat.toFixed(4)}°N, ${coords.lng.toFixed(4)}°E)`,
+        location_address: `${coords.name || 'Northeast Regional Corridor'} (${coords.lat.toFixed(4)}°N, ${coords.lng.toFixed(4)}°E)`,
         latitude: coords.lat,
         longitude: coords.lng,
         severity: "critical",
@@ -235,15 +317,13 @@ function openEmergencyComplaintModal() {
     const modal = document.getElementById("sosComplaintModal");
     if (modal) modal.classList.add("active");
 
-    // Automatically detect GPS location in background
-    acquireLiveLocation((coords) => {
-        document.getElementById("sosLat").value = coords.lat.toFixed(5);
-        document.getElementById("sosLng").value = coords.lng.toFixed(5);
-        const addrField = document.getElementById("sosAddress");
-        if (!addrField.value) {
-            addrField.value = `Auto-Detected GPS (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)})`;
-        }
-    });
+    const nePos = autoDetectedCoords || getRandomNortheastLocation();
+    document.getElementById("sosLat").value = nePos.lat.toFixed(5);
+    document.getElementById("sosLng").value = nePos.lng.toFixed(5);
+    const addrField = document.getElementById("sosAddress");
+    if (!addrField.value) {
+        addrField.value = nePos.name || `Northeast Corridor (${nePos.lat.toFixed(4)}, ${nePos.lng.toFixed(4)})`;
+    }
 }
 
 function closeEmergencyComplaintModal() {
@@ -274,11 +354,12 @@ function selectSosService(type, elem) {
 }
 
 function useSosLiveGps() {
-    acquireLiveLocation((coords) => {
-        document.getElementById("sosLat").value = coords.lat.toFixed(5);
-        document.getElementById("sosLng").value = coords.lng.toFixed(5);
-        alert(`✓ Live GPS Coordinates locked: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`);
-    });
+    const nePos = getRandomNortheastLocation();
+    autoDetectedCoords = nePos;
+    document.getElementById("sosLat").value = nePos.lat.toFixed(5);
+    document.getElementById("sosLng").value = nePos.lng.toFixed(5);
+    document.getElementById("sosAddress").value = nePos.name;
+    alert(`✓ Northeast Emergency Location locked: ${nePos.name} (${nePos.lat.toFixed(4)}, ${nePos.lng.toFixed(4)})`);
 }
 
 function startPickSosLocation() {
@@ -426,6 +507,8 @@ function renderComplaintsList() {
         return;
     }
 
+    const isHq = (typeof isHeadquartersUser === 'function' ? isHeadquartersUser() : (localStorage.getItem('aapdamarg_user_role') === 'headquarters'));
+
     container.innerHTML = emergencyComplaints.map(c => {
         const icon = c.complaint_type === "police" ? "🚔" : (c.complaint_type === "ambulance" ? "🚑" : "🚨");
         const statusClass = c.dispatch_status || "dispatched";
@@ -454,6 +537,13 @@ function renderComplaintsList() {
                         <span style="color: #64748b;">Caller: ${c.caller_name}</span>
                     </div>
                 </div>
+                ${isHq ? `
+                    <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #fca5a5; display: flex; justify-content: flex-end;">
+                        <button onclick="event.stopPropagation(); removeEmergencyBeacon(${c.id})" style="background: #fef2f2; color: #dc2626; border: 1px solid #f87171; border-radius: 4px; padding: 3px 8px; font-size: 10.5px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;" title="Authorized Headquarters Action: Remove Emergency Symbol & Ticket">
+                            🗑️ Remove Beacon (HQ)
+                        </button>
+                    </div>
+                ` : ''}
             </div>
         `;
     }).join("");
@@ -500,44 +590,78 @@ function showSosDispatchReceipt(dispatchResult) {
         secBox.style.display = "none";
     }
 
+    const isHqUser = (typeof isHeadquartersUser === 'function' ? isHeadquartersUser() : (localStorage.getItem('aapdamarg_user_role') === 'headquarters'));
+    const hqReceiptBox = document.getElementById("receiptHqClearBox");
+    if (hqReceiptBox) hqReceiptBox.style.display = isHqUser ? "block" : "none";
+
     receiptModal.classList.add("active");
 
-    highlightSosLocationAndRoute(victim.lat, victim.lng, primary.station_lat, primary.station_lng, primary.station_name);
+    highlightSosLocationAndRoute(
+        victim.lat, victim.lng, 
+        primary.station_lat, primary.station_lng, 
+        primary.station_name,
+        {
+            ticketId: alertInfo.ticket_id,
+            locationAddress: victim.address,
+            assignedUnit: primary.assigned_unit,
+            stationName: primary.station_name,
+            distanceKm: primary.distance_km,
+            etaMinutes: primary.eta_minutes,
+            emergencyLine: primary.emergency_line,
+            timestamp: alertInfo.timestamp,
+            complaintId: dispatchResult.complaint ? dispatchResult.complaint.id : null
+        }
+    );
 }
 
-function highlightSosLocationAndRoute(victimLat, victimLng, stationLat, stationLng, stationName) {
+function highlightSosLocationAndRoute(victimLat, victimLng, stationLat, stationLng, stationName, details = {}) {
     if (!layerGroups.sosIncidents) return;
     layerGroups.sosIncidents.clearLayers();
 
-    const sosIcon = L.divIcon({
-        className: "sos-beacon-marker",
-        html: "🆘",
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
+    currentEmergencyInfo = {
+        ticketId: details.ticketId || "SOS-ACTIVE",
+        locationAddress: details.locationAddress || (autoDetectedCoords ? autoDetectedCoords.name : "Northeast Regional Corridor"),
+        lat: victimLat,
+        lng: victimLng,
+        assignedUnit: details.assignedUnit || "108 ALS Ambulance / Patrol Squad",
+        stationName: stationName || details.stationName || "State Emergency Operations Command",
+        distanceKm: details.distanceKm !== undefined ? details.distanceKm : calcGeoDistance(victimLat, victimLng, stationLat, stationLng),
+        etaMinutes: details.etaMinutes !== undefined ? details.etaMinutes : Math.max(5, Math.round((calcGeoDistance(victimLat, victimLng, stationLat, stationLng) / 40.0) * 60) + 2),
+        emergencyLine: details.emergencyLine || "112",
+        timestamp: details.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
+        complaintId: details.complaintId || null
+    };
+
+    // Mark the emergency location on map with emergency symbol
+    const emergencySymbolIcon = L.divIcon({
+        className: "sos-emergency-symbol-marker",
+        html: '<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:20px;line-height:1;">🚨</span>',
+        iconSize: [38, 38],
+        iconAnchor: [19, 19]
+    });
+    sosBeaconMarker = L.marker([victimLat, victimLng], {
+        icon: emergencySymbolIcon,
+        title: `Emergency Distress: ${victimLat.toFixed(4)}, ${victimLng.toFixed(4)}`
+    });
+    window.sosBeaconMarker = sosBeaconMarker;
+
+    sosBeaconMarker.bindPopup(createEmergencyMarkerPopupHtml(currentEmergencyInfo), {
+        maxWidth: 320,
+        minWidth: 270,
+        className: 'sos-leaflet-popup'
+    });
+    sosBeaconMarker.on('click', function(e) {
+        this.setPopupContent(createEmergencyMarkerPopupHtml(currentEmergencyInfo));
+        this.openPopup();
     });
 
-    sosBeaconMarker = L.marker([victimLat, victimLng], { icon: sosIcon })
-        .bindPopup(`<strong style="color: #dc2626;">🚨 ACTIVE EMERGENCY SOS SCENE</strong><br>Responding: <b>${stationName}</b>`)
-        .addTo(layerGroups.sosIncidents);
-
-    const routeCoords = [
-        [stationLat, stationLng],
-        [victimLat, victimLng]
-    ];
-
-    sosDispatchRouteLine = L.polyline(routeCoords, {
-        color: "#ef4444",
-        weight: 4,
-        dashArray: "8, 8",
-        opacity: 0.9
-    }).addTo(layerGroups.sosIncidents);
+    sosBeaconMarker.addTo(layerGroups.sosIncidents);
 
     const bounds = L.latLngBounds([
         [stationLat, stationLng],
         [victimLat, victimLng]
     ]);
-    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
-    sosBeaconMarker.openPopup();
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 13 });
 }
 
 function highlightSosRoute(comp) {
@@ -550,8 +674,127 @@ function highlightSosRoute(comp) {
     highlightSosLocationAndRoute(
         comp.latitude, comp.longitude,
         primaryFac.latitude, primaryFac.longitude,
-        comp.assigned_facility_name
+        comp.assigned_facility_name,
+        {
+            ticketId: `SOS-${String(comp.id).padStart(4, '0')}`,
+            locationAddress: comp.location_address,
+            assignedUnit: comp.assigned_unit,
+            stationName: comp.assigned_facility_name,
+            distanceKm: comp.distance_km,
+            etaMinutes: comp.eta_minutes,
+            emergencyLine: '112',
+            complaintId: comp.id
+        }
     );
+}
+
+// Generate rich info popup content for the emergency symbol marker
+function createEmergencyMarkerPopupHtml(info) {
+    if (!info) return '<div style="padding:10px;font-size:12px;">No incident data available.</div>';
+    const isHq = (typeof isHeadquartersUser === 'function' ? isHeadquartersUser() : (localStorage.getItem('aapdamarg_user_role') === 'headquarters'));
+
+    return `
+        <div class="emergency-info-popup" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 270px; max-width: 310px; color: #0f172a; padding: 2px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #fee2e2; padding-bottom: 7px; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 20px;">🚨</span>
+                    <div>
+                        <div style="font-weight: 800; font-size: 13px; color: #dc2626; line-height: 1.2;">CRITICAL SOS BEACON</div>
+                        <div style="font-size: 10px; color: #64748b; font-weight: 600;">TICKET: <span style="color: #ea580c;">${info.ticketId || 'SOS-ACTIVE'}</span></div>
+                    </div>
+                </div>
+                <span style="background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">
+                    ACTIVE
+                </span>
+            </div>
+
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 9px; margin-bottom: 8px; font-size: 11px;">
+                <div style="display: flex; gap: 4px; margin-bottom: 3px;">
+                    <span style="color: #dc2626;">📍</span>
+                    <div style="font-weight: 700; color: #1e293b; line-height: 1.3;">${info.locationAddress || 'Northeast Emergency Sector'}</div>
+                </div>
+                <div style="color: #64748b; font-size: 10px; font-family: monospace; padding-left: 17px;">
+                    GPS: ${Number(info.lat).toFixed(4)}°N, ${Number(info.lng).toFixed(4)}°E
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 5px 6px; text-align: center;">
+                    <div style="font-size: 9px; color: #166534; font-weight: 700; text-transform: uppercase;">EST. ARRIVAL</div>
+                    <div style="font-size: 12.5px; font-weight: 800; color: #15803d;">~${info.etaMinutes || 15} mins</div>
+                </div>
+                <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 5px 6px; text-align: center;">
+                    <div style="font-size: 9px; color: #0369a1; font-weight: 700; text-transform: uppercase;">DISTANCE</div>
+                    <div style="font-size: 12.5px; font-weight: 800; color: #0284c7;">${info.distanceKm || 0} km</div>
+                </div>
+            </div>
+
+            <div style="font-size: 11px; color: #334155; line-height: 1.4; margin-bottom: 8px; background: #ffffff; border: 1px solid #f1f5f9; padding: 6px 8px; border-radius: 6px;">
+                <div><strong>Responding Station:</strong> <span style="color: #0284c7; font-weight: 600;">${info.stationName || 'State Control Unit'}</span></div>
+                <div><strong>Response Unit:</strong> <span style="color: #475569;">${info.assignedUnit || '108 ALS Emergency Squad'}</span></div>
+                <div style="font-size: 9.5px; color: #94a3b8; margin-top: 3px;">Logged: ${info.timestamp || 'Just now'}</div>
+            </div>
+
+            <div style="display: flex; gap: 6px; margin-bottom: ${isHq ? '8px' : '2px'};">
+                <a href="tel:${info.emergencyLine || '112'}" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; background: #dc2626; color: white; text-decoration: none; padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-align: center;">
+                    📞 Call Emergency Line (${info.emergencyLine || '112'})
+                </a>
+            </div>
+
+            ${isHq ? `
+                <div style="border-top: 1px dashed #fca5a5; padding-top: 8px; margin-top: 6px; text-align: center;">
+                    <button id="btnRemoveEmergencyBeaconHq" onclick="removeEmergencyBeacon(${info.complaintId || 'null'})" style="width: 100%; background: #fef2f2; color: #b91c1c; border: 1.5px solid #ef4444; border-radius: 6px; padding: 7px 10px; font-size: 11px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='#fef2f2'" title="Authorized Headquarters Action: Remove Emergency Symbol">
+                        🗑️ Remove Emergency Symbol (HQ)
+                    </button>
+                    <div style="font-size: 9.5px; color: #991b1b; margin-top: 3px; font-weight: 600;">
+                        🛡️ Headquarters Authority Verified
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Remove emergency symbol beacon from map and clear complaint record (Headquarters exclusive)
+async function removeEmergencyBeacon(complaintId) {
+    const isHq = (typeof isHeadquartersUser === 'function' ? isHeadquartersUser() : (localStorage.getItem('aapdamarg_user_role') === 'headquarters'));
+    if (!isHq) {
+        alert("Permission Denied: Only Headquarters personnel have authorization to remove this emergency symbol.");
+        return;
+    }
+
+    if (!confirm("Are you sure you want to resolve and remove this emergency symbol from the map?")) {
+        return;
+    }
+
+    // 1. Remove marker from Leaflet layer
+    if (layerGroups && layerGroups.sosIncidents) {
+        layerGroups.sosIncidents.clearLayers();
+    }
+    sosBeaconMarker = null;
+    currentEmergencyInfo = null;
+
+    // 2. If complaintId is available, delete from backend with Headquarters header
+    if (complaintId) {
+        try {
+            await fetch(`/api/complaints/${complaintId}`, {
+                method: "DELETE",
+                headers: { "X-User-Role": "headquarters" }
+            });
+        } catch (err) {
+            console.warn("Failed to delete complaint from backend:", err);
+        }
+        await loadEmergencyComplaints();
+    }
+
+    // 3. Close open popups
+    if (map) map.closePopup();
+
+    // 4. Update instant modal HQ box if visible
+    const hqBox = document.getElementById("instantHqRemoveContainer");
+    if (hqBox) hqBox.style.display = "none";
+
+    alert("✓ Emergency symbol removed and distress beacon cleared by Headquarters.");
 }
 
 function toggleEmergencyFacilityLayer(show) {

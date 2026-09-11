@@ -40,6 +40,11 @@ let currentRole = localStorage.getItem('aapdamarg_user_role') || null;
 let currentOfficerId = localStorage.getItem('aapdamarg_officer_id') || '';
 let selectedLoginRole = USER_ROLES.HEADQUARTERS;
 
+function isHeadquartersUser() {
+    const r = currentRole || localStorage.getItem('aapdamarg_user_role');
+    return r === USER_ROLES.HEADQUARTERS || r === 'headquarters';
+}
+
 // Field Officer Deployment Profile (Configured after officer login)
 const DEFAULT_OFFICER_PROFILE = {
     name: 'Major R. Sangma',
@@ -191,10 +196,15 @@ function initRoleSubsystem() {
             }
         }
     });
+
+    // Automatically pop up login modal whenever someone opens the link
+    setTimeout(() => {
+        openLoginModal();
+    }, 250);
 }
 
 // Open Login Modal
-function openLoginModal() {
+function openLoginModal(targetRole = null) {
     const modal = document.getElementById('loginModal');
     if (modal) {
         modal.classList.add('active');
@@ -204,7 +214,7 @@ function openLoginModal() {
         modal.style.visibility = 'visible';
     }
     hideLoginNotice();
-    setLoginRole(currentRole || USER_ROLES.HEADQUARTERS);
+    setLoginRole(targetRole || USER_ROLES.HEADQUARTERS);
     
     // Always start with completely blank inputs
     const idInput = document.getElementById('loginIdentifier');
@@ -495,7 +505,10 @@ function toggleRoleMenu(e) {
 
 // Apply Role Interface Transformations
 function applyRoleInterface(roleId) {
-    const config = ROLE_CONFIGS[roleId] || ROLE_CONFIGS.general_public;
+    if (!ROLE_CONFIGS[roleId]) roleId = USER_ROLES.GENERAL_PUBLIC;
+    currentRole = roleId;
+    localStorage.setItem('aapdamarg_user_role', roleId);
+    const config = ROLE_CONFIGS[roleId];
     
     // 1. Update Header Settings Button (Clean "Settings", no role suffix)
     const badgeBtn = document.getElementById('btnUserRoleBadge');
@@ -629,18 +642,43 @@ function applyRoleInterface(roleId) {
         if (btnSitrep) btnSitrep.style.display = '';
         if (mTileSitrep) mTileSitrep.style.display = 'flex';
     } else {
-        // Headquarters: Keep all buttons visible
+        // Headquarters: Central Dashboard remains VISIBLE
         if (btnDashboard) btnDashboard.style.display = '';
-        if (btnSitrep) btnSitrep.style.display = '';
         if (mTileDashboard) mTileDashboard.style.display = 'flex';
-        if (mTileSitrep) mTileSitrep.style.display = 'flex';
 
-        if (btnGps) btnGps.style.display = '';
-        if (btnSim) btnSim.style.display = '';
-        if (btnReport) btnReport.style.display = '';
-        if (mTileGps) mTileGps.style.display = 'flex';
-        if (mTileSim) mTileSim.style.display = 'flex';
-        if (mTileReport) mTileReport.style.display = 'flex';
+        // Explicitly REMOVE for Headquarters Employee:
+        // 1. SOS Dispatch button
+        if (btnSos) btnSos.style.display = 'none';
+        if (mNavSos) mNavSos.style.display = 'none';
+
+        // 2. Officer SITREP
+        if (btnSitrep) btnSitrep.style.display = 'none';
+        if (mTileSitrep) mTileSitrep.style.display = 'none';
+
+        // 3. Report Hazard
+        if (btnReport) btnReport.style.display = 'none';
+        if (mTileReport) mTileReport.style.display = 'none';
+
+        // 4. Simulate Drive
+        if (btnSim) btnSim.style.display = 'none';
+        if (mTileSim) mTileSim.style.display = 'none';
+
+        // 5. Live GPS
+        if (btnGps) btnGps.style.display = 'none';
+        if (mTileGps) mTileGps.style.display = 'none';
+
+        // Ensure GPS HUD & background simulator/tracking are inactive
+        const hud = document.getElementById('gpsHudBar');
+        if (hud) {
+            hud.classList.add('hidden');
+            hud.style.setProperty('display', 'none', 'important');
+        }
+        if (typeof stopDriveSimulator === 'function' && typeof isSimulating !== 'undefined' && isSimulating) {
+            stopDriveSimulator();
+        }
+        if (typeof toggleGpsTracking === 'function' && typeof isGpsActive !== 'undefined' && isGpsActive) {
+            toggleGpsTracking();
+        }
     }
 
     // 4. Sidebar Tabs Customization
@@ -707,6 +745,11 @@ function applyRoleInterface(roleId) {
     if (roleId === USER_ROLES.FIELD_OFFICER) {
         updateOfficerUI();
     }
+
+    // 9. Dynamically refresh feeds and map popups to reflect HQ administrative actions
+    if (typeof loadCommunityFeed === 'function') loadCommunityFeed();
+    if (typeof loadSitrepsList === 'function') loadSitrepsList();
+    if (typeof loadHazardsAndZones === 'function') loadHazardsAndZones();
 }
 
 // Quick 1-Click Reroute All Convoys from HQ Banner

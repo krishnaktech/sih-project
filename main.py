@@ -1,8 +1,10 @@
 import os
 import uuid
 import shutil
+import json
+import urllib.request
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,12 +12,12 @@ from pydantic import BaseModel
 
 from config import UPLOAD_DIR, STATIC_DIR, NE_CITIES, HAZARD_TYPES, SEVERITY_LEVELS
 from database import get_db, init_db
-from routing_engine import routing_engine
+from routing_engine import routing_engine, haversine_distance
 from weather_service import get_all_weather, get_live_weather, get_disaster_ticker_alerts
 import seed_data
 
 app = FastAPI(
-    title="AapdaMarg NE - North East India Disaster Resilience & Navigation",
+    title="Route Rakshak - North East India Disaster Resilience & Navigation",
     description="Adaptive route navigation, flood and landslide risk assessment, real-time weather alerts, and crowdsourced hazard reporting for North East India.",
     version="1.0.0"
 )
@@ -74,7 +76,7 @@ def read_root():
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
         return response
-    return {"message": "AapdaMarg NE API is running. index.html is being initialized."}
+    return {"message": "Route Rakshak API is running. index.html is being initialized."}
 
 @app.get("/download/apk")
 @app.get("/AapdaMarg-NE.apk")
@@ -240,6 +242,106 @@ def calculate_route(req: RouteRequest):
     print(f"DEBUG_ROUTE RESULT: safe_time={safe_time} hrs, direct_time={direct_time} hrs", flush=True)
     return result
 
+# ----------------- Reverse Geocoding (Real Location like Google Maps) -----------------
+
+GEOCODE_CACHE = {}
+
+def local_regional_geocode(lat: float, lng: float):
+    # Find closest North East city / landmark
+    closest_node = min(
+        NE_CITIES.keys(),
+        key=lambda k: haversine_distance(lat, lng, NE_CITIES[k]["lat"], NE_CITIES[k]["lng"])
+    )
+    city_info = NE_CITIES[closest_node]
+    dist_km = round(haversine_distance(lat, lng, city_info["lat"], city_info["lng"]), 1)
+    
+    dlat = lat - city_info["lat"]
+    dlng = lng - city_info["lng"]
+    ns = "North" if dlat > 0.02 else ("South" if dlat < -0.02 else "")
+    ew = "East" if dlng > 0.02 else ("West" if dlng < -0.02 else "")
+    direction = f"{ns} {ew}".strip()
+    direction_str = f"({dist_km} km {direction} of {city_info['name']})" if dist_km > 0.5 and direction else (f"Near {city_info['name']}" if dist_km > 0.3 else f"{city_info['name']}")
+
+    return {
+        "display_name": f"{direction_str}, {city_info.get('state', 'North East')}, India",
+        "short_name": f"{city_info['name'].split(' (')[0]} Area",
+        "road": f"Sector Road ({dist_km} km from {city_info['name'].split(' (')[0]})",
+        "suburb": city_info["name"].split(" (")[0],
+        "city": city_info["name"].split(" (")[0],
+        "district": city_info.get("state", "North East"),
+        "state": city_info.get("state", "Assam"),
+        "postcode": "",
+        "country": "India",
+        "lat": lat,
+        "lng": lng,
+        "nearest_hub": city_info["name"],
+        "distance_to_hub_km": dist_km,
+        "source": "regional_gis"
+    }
+
+@app.get("/api/geocode/reverse")
+async def reverse_geocode_api(lat: float, lng: float):
+    if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lng <= 180.0):
+        raise HTTPException(status_code=400, detail="Invalid coordinates: latitude must be [-90, 90] and longitude [-180, 180]")
+
+    cache_key = f"{round(lat, 5)},{round(lng, 5)}"
+    if cache_key in GEOCODE_CACHE:
+        return GEOCODE_CACHE[cache_key]
+
+    # Attempt online OSM Nominatim lookup for high precision street/landmark address
+    try:
+        url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lng}&format=json&zoom=18&addressdetails=1"
+        req = urllib.request.Request(url, headers={"User-Agent": "RouteRakshak-DisasterNav/1.0 (RealTime-GIS)"})
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            addr = data.get("address", {})
+            
+            # Format clean short and full names
+            road = addr.get("road") or addr.get("pedestrian") or addr.get("highway") or ""
+            neighbourhood = addr.get("suburb") or addr.get("neighbourhood") or addr.get("village") or addr.get("town") or ""
+            city = addr.get("city") or addr.get("town") or addr.get("county") or addr.get("state_district") or ""
+            district = addr.get("state_district") or addr.get("county") or ""
+            state = addr.get("state") or ""
+            postcode = addr.get("postcode") or ""
+            country = addr.get("country") or "India"
+
+            parts = [p for p in [road, neighbourhood, city, state] if p]
+            short_name = ", ".join(parts[:2]) if len(parts) >= 2 else (city or state or "Location")
+
+            # Find closest NE hub
+            closest_node = min(
+                NE_CITIES.keys(),
+                key=lambda k: haversine_distance(lat, lng, NE_CITIES[k]["lat"], NE_CITIES[k]["lng"])
+            )
+            hub_info = NE_CITIES[closest_node]
+            hub_dist = round(haversine_distance(lat, lng, hub_info["lat"], hub_info["lng"]), 1)
+
+            res = {
+                "display_name": data.get("display_name", f"{short_name}, {state}"),
+                "short_name": short_name,
+                "road": road,
+                "suburb": neighbourhood,
+                "city": city,
+                "district": district,
+                "state": state,
+                "postcode": postcode,
+                "country": country,
+                "lat": lat,
+                "lng": lng,
+                "nearest_hub": hub_info["name"],
+                "distance_to_hub_km": hub_dist,
+                "source": "osm_nominatim"
+            }
+            GEOCODE_CACHE[cache_key] = res
+            return res
+    except Exception as e:
+        print(f"Notice: Nominatim lookup error ({e}), using local GIS fallback.")
+
+    # Fallback to local regional geocoder
+    fallback = local_regional_geocode(lat, lng)
+    GEOCODE_CACHE[cache_key] = fallback
+    return fallback
+
 # ----------------- Crowdsourced Reporting & Photo Upload -----------------
 
 @app.get("/api/reports")
@@ -319,6 +421,35 @@ def upvote_report(report_id: int):
     if not row:
         raise HTTPException(status_code=404, detail="Incident not found")
     return {"success": True, "upvotes": row["upvotes"]}
+
+@app.delete("/api/reports/{report_id}")
+@app.delete("/api/hazards/{report_id}")
+def delete_report(
+    report_id: int, 
+    x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
+    role: Optional[str] = None
+):
+    user_role = (x_user_role or role or "").lower().strip()
+    if user_role != "headquarters":
+        raise HTTPException(
+            status_code=403, 
+            detail="Unauthorized: Only Headquarters personnel have clearance to remove hazard reports."
+        )
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, title FROM incidents WHERE id = ?", (report_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Incident hazard report not found.")
+    
+    cursor.execute("DELETE FROM incidents WHERE id = ?", (report_id,))
+    conn.commit()
+    conn.close()
+    return {
+        "success": True, 
+        "message": f"Hazard incident #{report_id} ('{row['title']}') successfully removed by Headquarters."
+    }
 
 @app.post("/api/reset-data")
 def reset_mock_data():
@@ -415,6 +546,34 @@ async def create_field_sitrep(
         "sitrep": sitrep
     }
 
+@app.delete("/api/sitreps/{sitrep_id}")
+def delete_sitrep(
+    sitrep_id: int,
+    x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
+    role: Optional[str] = None
+):
+    user_role = (x_user_role or role or "").lower().strip()
+    if user_role != "headquarters":
+        raise HTTPException(
+            status_code=403,
+            detail="Unauthorized: Only Headquarters personnel have clearance to remove field SITREPs."
+        )
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, corridor FROM field_sitreps WHERE id = ?", (sitrep_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Field SITREP not found.")
+    
+    cursor.execute("DELETE FROM field_sitreps WHERE id = ?", (sitrep_id,))
+    conn.commit()
+    conn.close()
+    return {
+        "success": True,
+        "message": f"Field SITREP #{sitrep_id} ('{row['corridor']}') successfully removed by Headquarters."
+    }
+
 # ----------------- Centralized Logistics & Readiness Dashboard -----------------
 
 @app.get("/api/dashboard/stats")
@@ -467,4 +626,31 @@ def update_complaint_status(complaint_id: int, req: ComplaintStatusUpdate):
     if not updated:
         raise HTTPException(status_code=404, detail="Complaint not found")
     return {"success": True, "complaint": updated}
+
+@app.delete("/api/complaints/{complaint_id}")
+def delete_emergency_complaint(
+    complaint_id: int,
+    x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
+    role: Optional[str] = None
+):
+    user_role = (x_user_role or role or "").lower().strip()
+    if user_role != "headquarters":
+        raise HTTPException(
+            status_code=403,
+            detail="Unauthorized: Only Headquarters personnel have clearance to remove emergency complaints."
+        )
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, location_address FROM emergency_complaints WHERE id = ?", (complaint_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Emergency complaint record not found.")
+    cursor.execute("DELETE FROM emergency_complaints WHERE id = ?", (complaint_id,))
+    conn.commit()
+    conn.close()
+    return {
+        "success": True,
+        "message": f"Emergency complaint #{complaint_id} successfully removed by Headquarters."
+    }
 

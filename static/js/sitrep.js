@@ -152,6 +152,8 @@ async function loadSitrepsList() {
             return;
         }
 
+        const isHq = (typeof isHeadquartersUser === 'function' ? isHeadquartersUser() : (localStorage.getItem('aapdamarg_user_role') === 'headquarters'));
+
         container.innerHTML = data.sitreps.map(s => {
             const dateStr = new Date(s.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
             return `
@@ -175,11 +177,59 @@ async function loadSitrepsList() {
                             <div style="font-size: 10px; color: #0284c7; background: #f0f9ff; padding: 4px 6px; text-align: center; font-weight: 700;">🔍 Click to enlarge SITREP photo proof</div>
                         </div>
                     ` : ''}
+                    <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap;">
+                        <button onclick="if (typeof zoomToCoord === 'function') zoomToCoord(${s.latitude}, ${s.longitude})" style="background: #eff6ff; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 2px 7px; cursor: pointer; font-size: 10.5px; font-weight: 600;">
+                            📍 View Location
+                        </button>
+                        ${isHq ? `
+                            <button onclick="deleteFieldSitrep(${s.id}, '${escapeQuotes(s.corridor)}')" style="background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 10.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 3px;" title="Authorized Headquarters Action: Remove SITREP">
+                                🗑️ Remove SITREP (HQ)
+                            </button>
+                        ` : ''}
+                    </div>
                 </div>
             `;
         }).join('');
 
     } catch (err) {
         console.error("Error loading SITREPs:", err);
+    }
+}
+
+async function deleteFieldSitrep(id, corridor = '') {
+    const isHq = (typeof isHeadquartersUser === 'function' ? isHeadquartersUser() : (localStorage.getItem('aapdamarg_user_role') === 'headquarters'));
+    if (!isHq) {
+        alert("Permission Denied: Only Headquarters personnel have authorization to remove field SITREPs.");
+        return;
+    }
+
+    const confirmMsg = corridor 
+        ? `Headquarters Authorization:\n\nAre you sure you want to remove field situation report for "${corridor}" (ID #${id})?\n\nThis will remove the official SITREP from the operational records.`
+        : `Headquarters Authorization:\n\nAre you sure you want to remove field SITREP #${id}?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+        const res = await fetch(`/api/sitreps/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'X-User-Role': 'headquarters'
+            }
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({ detail: 'Failed to delete SITREP' }));
+            throw new Error(errData.detail || 'Server error removing SITREP');
+        }
+
+        const data = await res.json();
+        alert(`✅ ${data.message || 'SITREP successfully removed by Headquarters.'}`);
+
+        // Dynamically refresh SITREP list
+        await loadSitrepsList();
+        if (typeof loadFleetTracking === 'function') await loadFleetTracking();
+        if (typeof loadLogisticsAlerts === 'function') await loadLogisticsAlerts();
+    } catch (err) {
+        alert(`Failed to remove SITREP: ${err.message}`);
     }
 }

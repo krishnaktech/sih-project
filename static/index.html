@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="color-scheme" content="light">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>AapdaMarg NE - North East India Disaster-Adaptive Route & Hazard Intelligence</title>
+    <title>Route Rakshak - North East India Disaster-Adaptive Route & Hazard Intelligence</title>
     
     <!-- Leaflet GIS Map Library -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -17,12 +18,12 @@
     <meta name="theme-color" content="#ffffff">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="AapdaMarg NE">
+    <meta name="apple-mobile-web-app-title" content="Route Rakshak">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/854/854878.png">
     <link rel="apple-touch-icon" sizes="180x180" href="https://cdn-icons-png.flaticon.com/512/854/854878.png">
 
     <!-- Custom Command Center Styling -->
-    <link rel="stylesheet" href="/css/style.css?v=4.1">
+    <link rel="stylesheet" href="/css/style.css?v=4.4">
     
     <script>
         function handleApkDownload(e) {
@@ -129,7 +130,7 @@
             <div class="brand-badge">
                 <div class="brand-icon">⛰️</div>
                 <div class="brand-text">
-                    <h1>AapdaMarg NE</h1>
+                    <h1>Route Rakshak</h1>
                     <p class="brand-subtext">North East Disaster Resilience & Safe Route Navigation System</p>
                 </div>
             </div>
@@ -404,23 +405,92 @@
             <div id="tabRoute" class="tab-content" style="display: flex;">
                 
                 <div class="route-box">
-                    <div class="form-group">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <label for="originSelect" style="margin-bottom: 0;">Origin (Start Point)</label>
-                            <a href="javascript:void(0)" onclick="useGpsAsOrigin()" style="color: #38bdf8; font-size: 11px; text-decoration: none; font-weight: 700;">
-                                📍 Use My Live GPS
-                            </a>
-                        </div>
-                        <select id="originSelect" class="form-control" onchange="handleLocationSelectChange()">
-                            <option value="">Loading locations...</option>
-                        </select>
+                    <!-- Route Input Mode Switcher -->
+                    <div class="route-mode-switcher">
+                        <button type="button" class="route-mode-btn active" id="btnModeCity" onclick="setRouteInputMode('city')">
+                            🏙️ Select Cities
+                        </button>
+                        <button type="button" class="route-mode-btn" id="btnModeCoords" onclick="setRouteInputMode('coords')">
+                            🌐 Enter Coordinates
+                        </button>
                     </div>
 
-                    <div class="form-group">
-                        <label for="destSelect">Destination</label>
-                        <select id="destSelect" class="form-control" onchange="handleLocationSelectChange()">
-                            <option value="">Loading locations...</option>
-                        </select>
+                    <!-- Panel 1: Predefined Cities Dropdowns -->
+                    <div id="panelCityInputs">
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                <label for="originSelect" style="margin-bottom: 0;">Origin (Start Point)</label>
+                                <a href="javascript:void(0)" onclick="useGpsAsOrigin()" style="color: #38bdf8; font-size: 11px; text-decoration: none; font-weight: 700;">
+                                    📍 Use My Live GPS
+                                </a>
+                            </div>
+                            <select id="originSelect" class="form-control" onchange="handleLocationSelectChange()">
+                                <option value="">Loading locations...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="destSelect">Destination</label>
+                            <select id="destSelect" class="form-control" onchange="handleLocationSelectChange()">
+                                <option value="">Loading locations...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Panel 2: Precise Coordinates Input (Google Maps Style) -->
+                    <div id="panelCoordInputs" style="display: none;">
+                        <!-- Start Coordinate Field -->
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                <label for="startCoordInput" style="margin-bottom: 0;">Start Position (Coordinates)</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <a href="javascript:void(0)" onclick="useGpsForStartCoord()" style="color: #0284c7; font-size: 11px; text-decoration: none; font-weight: 700;">
+                                        📍 My GPS
+                                    </a>
+                                    <a href="javascript:void(0)" id="btnPickStartMap" onclick="toggleMapPointPicker('start')" style="color: #059669; font-size: 11px; text-decoration: none; font-weight: 700;">
+                                        🗺️ Pick on Map
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="coord-input-wrapper">
+                                <input type="text" id="startCoordInput" class="form-control coord-input" placeholder="e.g. 26.1445, 91.7362" oninput="handleCoordInputChange('start')">
+                                <button type="button" id="btnClearStartCoord" class="btn-clear-coord" onclick="clearCoordInput('start')" title="Clear">✕</button>
+                            </div>
+                            <div id="startCoordLocationCard" class="coord-location-card" style="display: none;">
+                                <div class="coord-loc-header">
+                                    <span class="coord-loc-pin">🟢</span>
+                                    <span class="coord-loc-title" id="startCoordLocTitle">Locating...</span>
+                                </div>
+                                <div class="coord-loc-address" id="startCoordLocAddress"></div>
+                            </div>
+                        </div>
+
+                        <!-- End Coordinate Field -->
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                <label for="endCoordInput" style="margin-bottom: 0;">End Position (Coordinates)</label>
+                                <a href="javascript:void(0)" id="btnPickEndMap" onclick="toggleMapPointPicker('end')" style="color: #059669; font-size: 11px; text-decoration: none; font-weight: 700;">
+                                    🗺️ Pick on Map
+                                </a>
+                            </div>
+                            <div class="coord-input-wrapper">
+                                <input type="text" id="endCoordInput" class="form-control coord-input" placeholder="e.g. 25.5788, 91.8933" oninput="handleCoordInputChange('end')">
+                                <button type="button" id="btnClearEndCoord" class="btn-clear-coord" onclick="clearCoordInput('end')" title="Clear">✕</button>
+                            </div>
+                            <div id="endCoordLocationCard" class="coord-location-card" style="display: none;">
+                                <div class="coord-loc-header">
+                                    <span class="coord-loc-pin">🏁</span>
+                                    <span class="coord-loc-title" id="endCoordLocTitle">Locating...</span>
+                                </div>
+                                <div class="coord-loc-address" id="endCoordLocAddress"></div>
+                            </div>
+                        </div>
+
+                        <!-- Map Picker Status Banner -->
+                        <div id="mapPickerNotice" class="map-picker-banner" style="display: none;">
+                            <span id="mapPickerNoticeText">📍 Click anywhere on the map to set Start position</span>
+                            <button type="button" onclick="cancelMapPointPicker()" class="btn-cancel-picker">Cancel</button>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -460,9 +530,6 @@
                 <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 12px; border-radius: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <button type="button" class="btn btn-secondary btn-tab-back" onclick="switchSidebarTab('tabRoute')" style="font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; border: 1px solid #fca5a5; background: #ffffff; color: #dc2626; display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="Back to Route Planner">
-                                <span>←</span> Back
-                            </button>
                             <div>
                                 <h3 style="font-size: 13px; font-weight: 800; color: #dc2626; margin: 0;">🚨 Emergency SOS Dispatch</h3>
                                 <p style="font-size: 10.5px; color: #991b1b; margin: 0;">Automatic GPS detection & alert to nearest Police & Hospital.</p>
@@ -491,9 +558,6 @@
             <div id="tabWeather" class="tab-content" style="display: none;">
                 <div style="background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 8px;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                        <button type="button" class="btn btn-secondary btn-tab-back" onclick="switchSidebarTab('tabRoute')" style="font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="Back to Route Planner">
-                            <span>←</span> Back
-                        </button>
                         <h3 style="font-size: 12.5px; font-weight: 700; color: #0284c7; margin: 0;">North East Flood & Rain Monitoring</h3>
                     </div>
                     <p style="font-size: 11px; color: #64748b; margin: 0;">Real-time precipitation telemetry combined with IMD & ASDMA Brahmaputra basin hydro-meters.</p>
@@ -507,9 +571,6 @@
             <div id="tabFeed" class="tab-content" style="display: none;">
                 <div class="tab-header-strip" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0 10px 0; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; gap: 8px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <button type="button" class="btn btn-secondary btn-tab-back" onclick="switchSidebarTab('tabRoute')" style="font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; transition: all 0.2s ease;" title="Back to Route Planner">
-                            <span>←</span> Back
-                        </button>
                         <span style="font-size: 13px; font-weight: 800; color: #0f172a;">Live Crowdsourced Incidents</span>
                     </div>
                     <button onclick="openReportModal()" style="background: #0284c7; color: white; border: none; border-radius: 6px; padding: 5px 12px; font-size: 11.5px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
@@ -526,9 +587,6 @@
                 <div style="background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <button type="button" class="btn btn-secondary btn-tab-back" onclick="switchSidebarTab('tabRoute')" style="font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="Back to Route Planner">
-                                <span>←</span> Back
-                            </button>
                             <h3 style="font-size: 12.5px; font-weight: 700; color: #0284c7; margin: 0;">Essential Fleet Tracking</h3>
                         </div>
                         <button onclick="openCommandDashboard()" style="background: #0284c7; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 10.5px; font-weight: bold; cursor: pointer; white-space: nowrap;">
@@ -553,9 +611,6 @@
             <div id="tabSitrep" class="tab-content" style="display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0; gap: 8px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <button type="button" class="btn btn-secondary btn-tab-back" onclick="switchSidebarTab('tabRoute')" style="font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="Back to Route Planner">
-                            <span>←</span> Back
-                        </button>
                         <div>
                             <h3 style="font-size: 12.5px; font-weight: 700; color: #0284c7; margin: 0;">Authority SITREPs</h3>
                             <p style="font-size: 10.5px; color: #64748b; margin: 0;">Verified situation reports by NDRF, BRO, SDRF & PWD.</p>
@@ -722,7 +777,7 @@
         <div class="login-modal-card" onclick="event.stopPropagation()">
             <div class="login-modal-header">
                 <button type="button" class="modal-close" style="position: absolute; top: 16px; right: 20px;" onclick="closeLoginModal()">&times;</button>
-                <div class="brand-pill">📍 AapdaMarg NE • Secure Gateway</div>
+                <div class="brand-pill">📍 Route Rakshak • Secure Gateway</div>
                 <h2 class="login-modal-title">Account Login</h2>
                 <p class="login-modal-sub">
                     Sign in with your official ID or phone number to access your operational role.
@@ -973,7 +1028,7 @@
                 </div>
 
                 <div style="margin-top: 14px; text-align: center; background: #ecfdf5; border: 1px dashed #86efac; padding: 12px; border-radius: 8px;">
-                    <div style="font-size: 12px; color: #15803d; font-weight: 700;">🎉 Done! AapdaMarg NE will appear on your iPhone Home Screen and launch in full-screen standalone app mode!</div>
+                    <div style="font-size: 12px; color: #15803d; font-weight: 700;">🎉 Done! Route Rakshak will appear on your iPhone Home Screen and launch in full-screen standalone app mode!</div>
                 </div>
 
                 <div style="margin-top: 16px; display: flex; gap: 8px;">
@@ -1350,6 +1405,12 @@
                             ❌ Cancel Dispatch
                         </button>
                     </div>
+
+                    <div id="instantHqRemoveContainer" style="display: none; margin-top: 12px; padding-top: 10px; border-top: 1px dashed #fca5a5;">
+                        <button type="button" onclick="cancelInstantSos(); removeEmergencyBeacon();" style="width: 100%; background: #fef2f2; color: #b91c1c; border: 1.5px solid #ef4444; border-radius: 8px; padding: 8px 12px; font-size: 11px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            🗑️ Clear / Remove Emergency Symbol (HQ)
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1518,26 +1579,28 @@
                         📍 View on Live Map
                     </button>
                 </div>
+
+                <div id="receiptHqClearBox" style="display: none; margin-top: 10px; border-top: 1px dashed rgba(255,255,255,0.25); padding-top: 8px;">
+                    <button type="button" onclick="closeSosReceiptModal(); removeEmergencyBeacon();" style="width: 100%; background: #fef2f2; color: #dc2626; border: 1.5px solid #ef4444; border-radius: 6px; padding: 7px 10px; font-size: 11px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        🗑️ Remove Emergency Symbol (HQ)
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="/static/js/map.js?v=6.0.0"></script>
-    <script src="/static/js/routing.js?v=6.0.0"></script>
-    <script src="/static/js/weather.js?v=6.0.0"></script>
-    <script src="/static/js/reporting.js?v=6.0.0"></script>
-    <script src="/static/js/gps.js?v=6.0.0"></script>
-    <script src="/static/js/fleet.js?v=7.0.0"></script>
-    <script src="/static/js/sitrep.js?v=7.0.0"></script>
-    <script src="/static/js/sos.js?v=7.0.0"></script>
-    <script src="/static/js/role.js?v=7.0.0"></script>
-    <script src="/static/js/app.js?v=7.0.0"></script>
-
-
-
-
-
+    <script src="/static/js/map.js?v=8.1.0"></script>
+    <script src="/static/js/routing.js?v=8.1.0"></script>
+    <script src="/static/js/weather.js?v=8.1.0"></script>
+    <script src="/static/js/reporting.js?v=8.1.0"></script>
+    <script src="/static/js/gps.js?v=8.1.0"></script>
+    <script src="/static/js/fleet.js?v=8.1.0"></script>
+    <script src="/static/js/sitrep.js?v=8.1.0"></script>
+    <script src="/static/js/sos.js?v=8.6.0"></script>
+    <script src="/static/js/role.js?v=8.1.0"></script>
+    <script src="/static/js/app.js?v=8.1.0"></script>
+    <script src="/static/js/custom_select.js?v=1.0.0"></script>
 
 </body>
 </html>

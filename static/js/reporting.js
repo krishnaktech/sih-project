@@ -149,13 +149,15 @@ async function loadCommunityFeed() {
             return;
         }
 
+        const isHq = (typeof isHeadquartersUser === 'function' ? isHeadquartersUser() : (localStorage.getItem('aapdamarg_user_role') === 'headquarters'));
+
         feedContainer.innerHTML = data.reports.map(r => {
             const dateStr = new Date(r.created_at).toLocaleDateString('en-IN', {
                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             });
 
             return `
-                <div class="feed-item">
+                <div class="feed-item" id="feed-item-${r.id}">
                     ${r.photo_url ? `<img src="${r.photo_url}" class="feed-item-img" alt="Hazard Photo" onclick="openPhotoModal('${r.photo_url}', '${escapeQuotes(r.title)}')" style="cursor: pointer;">` : ''}
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
                         <span style="font-size: 10px; font-weight: 800; background: #dc2626; color: white; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">
@@ -166,15 +168,20 @@ async function loadCommunityFeed() {
                     <strong style="font-size: 12.5px; color: #0f172a; display: block; margin: 3px 0;">${r.title}</strong>
                     <p style="font-size: 11px; color: #475569; line-height: 1.3; margin-bottom: 8px;">${r.description}</p>
                     
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e2e8f0; padding-top: 6px; font-size: 10.5px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e2e8f0; padding-top: 6px; font-size: 10.5px; flex-wrap: wrap; gap: 6px;">
                         <span style="color: #64748b;">By: <strong style="color: #1e293b;">${r.reporter_name}</strong></span>
-                        <div style="display: flex; gap: 8px;">
+                        <div style="display: flex; gap: 6px; align-items: center;">
                             <button onclick="zoomToCoord(${r.latitude}, ${r.longitude})" style="background: #eff6ff; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 2px 7px; cursor: pointer; font-size: 10.5px; font-weight: 600;">
                                 📍 View on Map
                             </button>
                             <button onclick="upvoteIncident(${r.id}, this)" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 7px; cursor: pointer; font-size: 10.5px; font-weight: 600;">
                                 👍 ${r.upvotes}
                             </button>
+                            ${isHq ? `
+                                <button onclick="deleteHazardReport(${r.id}, '${escapeQuotes(r.title)}')" style="background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 10.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 3px;" title="Authorized Headquarters Action: Remove Hazard">
+                                    🗑️ Remove
+                                </button>
+                            ` : ''}
                         </div>
                     </div>
                 </div>
@@ -183,6 +190,50 @@ async function loadCommunityFeed() {
 
     } catch (err) {
         console.error("Failed to load community feed:", err);
+    }
+}
+
+async function deleteHazardReport(id, title = '') {
+    const isHq = (typeof isHeadquartersUser === 'function' ? isHeadquartersUser() : (localStorage.getItem('aapdamarg_user_role') === 'headquarters'));
+    if (!isHq) {
+        alert("Permission Denied: Only Headquarters personnel have authorization to remove hazards.");
+        return;
+    }
+
+    const confirmMsg = title 
+        ? `Headquarters Authorization:\n\nAre you sure you want to remove hazard report "${title}" (ID #${id})?\n\nThis will clear the hazard from the map, unblock emergency routing, and update all feeds.`
+        : `Headquarters Authorization:\n\nAre you sure you want to remove hazard report #${id}?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+        const res = await fetch(`/api/reports/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'X-User-Role': 'headquarters'
+            }
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({ detail: 'Failed to delete' }));
+            throw new Error(errData.detail || 'Server error removing hazard');
+        }
+
+        const data = await res.json();
+        alert(`✅ ${data.message || 'Hazard successfully removed by Headquarters.'}`);
+
+        // Dynamically update map and active routes
+        if (typeof loadHazardsAndZones === 'function') await loadHazardsAndZones();
+        if (typeof loadCommunityFeed === 'function') await loadCommunityFeed();
+
+        // If an active route was plotted, re-evaluate route calculation
+        const origin = document.getElementById('originSelect')?.value;
+        const dest = document.getElementById('destSelect')?.value;
+        if (origin && dest && origin !== dest && typeof calculateRoute === 'function') {
+            calculateRoute();
+        }
+    } catch (err) {
+        alert(`Failed to remove hazard: ${err.message}`);
     }
 }
 

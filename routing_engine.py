@@ -29,6 +29,48 @@ def point_to_segment_distance(px, py, x1, y1, x2, y2):
     proj_y = y1 + t * dy
     return haversine_distance(px, py, proj_x, proj_y)
 
+import urllib.request
+
+OSRM_ROUTE_CACHE = {}
+
+def fetch_osrm_road_geometry(lat1: float, lon1: float, lat2: float, lon2: float):
+    """
+    Fetches real road driving path from OSRM between two coordinates.
+    Returns: (coordinates_list, distance_km, duration_hours) or (None, None, None)
+    """
+    key = f"{round(lat1, 4)},{round(lon1, 4)}_{round(lat2, 4)},{round(lon2, 4)}"
+    if key in OSRM_ROUTE_CACHE:
+        return OSRM_ROUTE_CACHE[key]
+
+    rev_key = f"{round(lat2, 4)},{round(lon2, 4)}_{round(lat1, 4)},{round(lon1, 4)}"
+    if rev_key in OSRM_ROUTE_CACHE:
+        coords, dist, dur = OSRM_ROUTE_CACHE[rev_key]
+        rev_res = (list(reversed(coords)), dist, dur)
+        OSRM_ROUTE_CACHE[key] = rev_res
+        return rev_res
+
+    url = (
+        f"https://router.project-osrm.org/route/v1/driving/"
+        f"{lon1},{lat1};{lon2},{lat2}"
+        f"?overview=full&geometries=geojson"
+    )
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'RouteRakshak-RoutingEngine/2.0'})
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            if data.get("code") == "Ok" and data.get("routes"):
+                route = data["routes"][0]
+                coords = [[round(p[1], 5), round(p[0], 5)] for p in route["geometry"]["coordinates"]]
+                dist_km = round(route["distance"] / 1000.0, 1)
+                duration_hours = round(route["duration"] / 3600.0, 2)
+                res = (coords, dist_km, duration_hours)
+                OSRM_ROUTE_CACHE[key] = res
+                return res
+    except Exception as e:
+        print(f"Notice: OSRM route fetch failed ({lat1},{lon1} -> {lat2},{lon2}): {e}")
+
+    return None, None, None
+
 class NorthEastRoutingEngine:
     def __init__(self):
         self.graph = nx.Graph()
@@ -269,17 +311,53 @@ class NorthEastRoutingEngine:
 
         user_gps_origin = None
         user_gps_dest = None
+        origin_custom_name = None
+        dest_custom_name = None
 
         graph_origin = origin
         graph_dest = destination
 
-        # Resolve GPS Origin
-        if origin.startswith("gps:"):
+        # Helper to parse coordinate input
+        def parse_coord_input(val):
+            val_clean = val.strip()
+            name = None
+            if "|" in val_clean:
+                parts = val_clean.split("|", 1)
+                val_clean = parts[0].strip()
+                name = parts[1].strip()
+            
+            for prefix in ["coords:", "coord:", "gps:"]:
+                if val_clean.lower().startswith(prefix):
+                    val_clean = val_clean[len(prefix):].strip()
+                    break
+
+            if "," in val_clean:
+                coords = val_clean.split(",")
+                if len(coords) == 2:
+                    try:
+                        lat = float(coords[0].strip())
+                        lng = float(coords[1].strip())
+                        if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0:
+                            return lat, lng, name
+                    except Exception:
+                        pass
+            return None, None, None
+
+        # Resolve Origin
+        orig_lat, orig_lng, orig_name = parse_coord_input(origin)
+        if orig_lat is not None:
+            user_gps_origin = {"lat": orig_lat, "lng": orig_lng}
+            origin_custom_name = orig_name
+            # Find closest North East node
+            graph_origin = min(
+                NE_CITIES.keys(),
+                key=lambda k: haversine_distance(orig_lat, orig_lng, NE_CITIES[k]["lat"], NE_CITIES[k]["lng"])
+            )
+        elif origin.startswith("gps:"):
             try:
                 coords = origin.replace("gps:", "").split(",")
                 user_lat, user_lng = float(coords[0]), float(coords[1])
                 user_gps_origin = {"lat": user_lat, "lng": user_lng}
-                # Find closest North East node
                 graph_origin = min(
                     NE_CITIES.keys(),
                     key=lambda k: haversine_distance(user_lat, user_lng, NE_CITIES[k]["lat"], NE_CITIES[k]["lng"])
@@ -287,8 +365,16 @@ class NorthEastRoutingEngine:
             except Exception:
                 graph_origin = "guwahati"
 
-        # Resolve GPS Destination
-        if destination.startswith("gps:"):
+        # Resolve Destination
+        dest_lat, dest_lng, d_name = parse_coord_input(destination)
+        if dest_lat is not None:
+            user_gps_dest = {"lat": dest_lat, "lng": dest_lng}
+            dest_custom_name = d_name
+            graph_dest = min(
+                NE_CITIES.keys(),
+                key=lambda k: haversine_distance(dest_lat, dest_lng, NE_CITIES[k]["lat"], NE_CITIES[k]["lng"])
+            )
+        elif destination.startswith("gps:"):
             try:
                 coords = destination.replace("gps:", "").split(",")
                 user_lat, user_lng = float(coords[0]), float(coords[1])
@@ -440,44 +526,188 @@ class NorthEastRoutingEngine:
 
             avg_risk = round(weighted_risk / total_dist, 1) if total_dist > 0 else 0
 
-            # If GPS origin exists, prepend it to road_polyline and coordinates
-            if user_gps_origin:
-                gps_lat = user_gps_origin["lat"]
-                gps_lng = user_gps_origin["lng"]
-                road_polyline.insert(0, [gps_lat, gps_lng])
-                coordinates.insert(0, {
-                    "lat": gps_lat,
-                    "lng": gps_lng,
-                    "name": "📍 Current GPS Location",
-                    "node_id": "current_gps"
-                })
-                # Add connector distance and connector time
-                first_node = NE_CITIES.get(path[0])
-                if first_node:
-                    conn_dist = round(haversine_distance(gps_lat, gps_lng, first_node["lat"], first_node["lng"]), 1)
-                    conn_speed = self.calculate_vehicle_speed("plains", 0, {"total_risk": 10}, vehicle_mode)
-                    total_dist = round(total_dist + conn_dist, 1)
-                    total_travel_time_hours += (conn_dist / conn_speed)
+            # If path has only 1 node and both custom origin and destination exist (local / intra-city trip)
+            if len(path) == 1 and user_gps_origin and user_gps_dest:
+                orig_lat, orig_lng = user_gps_origin["lat"], user_gps_origin["lng"]
+                dest_lat, dest_lng = user_gps_dest["lat"], user_gps_dest["lng"]
 
-            # If GPS dest exists, append it
-            if user_gps_dest:
-                dest_lat = user_gps_dest["lat"]
-                dest_lng = user_gps_dest["lng"]
-                road_polyline.append([dest_lat, dest_lng])
-                coordinates.append({
-                    "lat": dest_lat,
-                    "lng": dest_lng,
-                    "name": "📍 Custom GPS Destination",
-                    "node_id": "custom_dest"
-                })
-                last_node = NE_CITIES.get(path[-1])
-                if last_node:
-                    conn_dist = round(haversine_distance(dest_lat, dest_lng, last_node["lat"], last_node["lng"]), 1)
-                    conn_speed = self.calculate_vehicle_speed("plains", 0, {"total_risk": 10}, vehicle_mode)
-                    total_dist = round(total_dist + conn_dist, 1)
-                    total_travel_time_hours += (conn_dist / conn_speed)
+                # Fetch REAL road polyline through streets
+                road_pts, real_dist, real_time = fetch_osrm_road_geometry(orig_lat, orig_lng, dest_lat, dest_lng)
+                if road_pts and len(road_pts) >= 2:
+                    road_polyline = road_pts
+                    total_dist = real_dist
+                else:
+                    direct_dist = round(haversine_distance(orig_lat, orig_lng, dest_lat, dest_lng), 1)
+                    total_dist = direct_dist
+                    road_polyline = [[orig_lat, orig_lng], [dest_lat, dest_lng]]
 
-            travel_time_hours = round(total_travel_time_hours, 1)
+                # Assess local hazards along this road polyline
+                local_hazards = []
+                for inc in incidents:
+                    i_lat, i_lng = inc.get("latitude"), inc.get("longitude")
+                    if i_lat is not None and i_lng is not None and road_polyline:
+                        step = max(1, len(road_polyline) // 30)
+                        min_d = min(haversine_distance(i_lat, i_lng, pt[0], pt[1]) for pt in road_polyline[::step])
+                        if min_d < 1.5:
+                            local_hazards.append(inc.get("title", "Disaster Alert"))
+                for st in structures:
+                    s_lat, s_lng = st.get("latitude"), st.get("longitude")
+                    if s_lat is not None and s_lng is not None and road_polyline:
+                        step = max(1, len(road_polyline) // 30)
+                        min_d = min(haversine_distance(s_lat, s_lng, pt[0], pt[1]) for pt in road_polyline[::step])
+                        if min_d < 1.0:
+                            local_hazards.append(f"Damaged Structure: {st.get('name')}")
+
+                if local_hazards:
+                    weighted_risk = total_dist * min(90.0, 45.0 + len(local_hazards) * 20.0)
+                    all_hazards.extend(local_hazards)
+                else:
+                    weighted_risk = total_dist * 8.0
+
+                risk_score = round(weighted_risk / max(0.1, total_dist), 1)
+                risk_info = {"total_risk": risk_score}
+                closest_city = NE_CITIES.get(path[0], {})
+                is_mountainous = closest_city.get("elevation", 0) > 600
+                base_terrain = "mountainous" if is_mountainous else "plains"
+
+                # Calculate realistic vehicle-specific travel time & speed
+                if vehicle_mode == "foot":
+                    # Foot patrol walking speed (independent of motor traffic limits)
+                    walk_speed = self.calculate_vehicle_speed(base_terrain, 0, risk_info, "foot")
+                    total_travel_time_hours = total_dist / max(1.5, walk_speed)
+                    calc_speed = walk_speed
+                else:
+                    # Motorized vehicles: standard car baseline duration from OSRM
+                    base_car_time = real_time if real_time else max(0.05, total_dist / (38.0 if not is_mountainous else 28.0))
+                    if vehicle_mode == "4x4":
+                        # 4x4 / SUV: nimble over city obstacles, potholes, high clearance (~14% faster than standard car)
+                        risk_factor = max(0.60, 1.0 - (risk_score / 200.0))
+                        total_travel_time_hours = (base_car_time * (65.0 / 74.0)) / risk_factor
+                    elif vehicle_mode == "emergency_convoy":
+                        # NDRF heavy truck: wide turning radius, slower acceleration in city streets (~30% slower than car)
+                        risk_factor = max(0.50, 1.0 - (risk_score / 170.0))
+                        total_travel_time_hours = (base_car_time * (65.0 / 50.0)) / risk_factor
+                    else: # standard
+                        risk_factor = max(0.40, 1.0 - (risk_score / 140.0))
+                        total_travel_time_hours = base_car_time / risk_factor
+                    calc_speed = total_dist / max(0.01, total_travel_time_hours)
+
+                orig_disp_name = origin_custom_name or f"📍 Start ({orig_lat:.4f}, {orig_lng:.4f})"
+                dest_disp_name = dest_custom_name or f"🎯 Destination ({dest_lat:.4f}, {dest_lng:.4f})"
+                segments = [{
+                    "from_id": "custom_origin",
+                    "from_name": orig_disp_name,
+                    "to_id": "custom_dest",
+                    "to_name": dest_disp_name,
+                    "highway": "City Arterial & Connector Corridors",
+                    "distance_km": total_dist,
+                    "elevation_gain": 0,
+                    "risk_score": risk_score,
+                    "risk_badge": "danger" if local_hazards else "safe",
+                    "flood_risk": 20 if local_hazards else 0,
+                    "landslide_risk": 25 if local_hazards else 0,
+                    "structure_risk": 15 if local_hazards else 0,
+                    "hazards": local_hazards,
+                    "speed_kmh": round(calc_speed, 1),
+                    "segment_time_hours": round(total_travel_time_hours, 2)
+                }]
+                coordinates = [
+                    {"lat": orig_lat, "lng": orig_lng, "name": orig_disp_name, "node_id": "custom_origin"},
+                    {"lat": dest_lat, "lng": dest_lng, "name": dest_disp_name, "node_id": "custom_dest"}
+                ]
+
+            # If path has > 1 node:
+            if len(path) > 1:
+                # If custom coordinate origin exists, connect to first highway node via real road
+                if user_gps_origin:
+                    gps_lat = user_gps_origin["lat"]
+                    gps_lng = user_gps_origin["lng"]
+                    first_node = NE_CITIES.get(path[0])
+                    if first_node:
+                        conn_dist = haversine_distance(gps_lat, gps_lng, first_node["lat"], first_node["lng"])
+                        if conn_dist > 0.15:
+                            conn_pts, conn_d, conn_t = fetch_osrm_road_geometry(gps_lat, gps_lng, first_node["lat"], first_node["lng"])
+                            actual_conn_dist = conn_d if (conn_pts and len(conn_pts) >= 2) else conn_dist
+                            if conn_pts and len(conn_pts) >= 2:
+                                road_polyline = conn_pts[:-1] + road_polyline
+                            else:
+                                road_polyline.insert(0, [gps_lat, gps_lng])
+                            total_dist = round(total_dist + actual_conn_dist, 1)
+
+                            conn_terrain = "mountainous" if first_node.get("elevation", 0) > 600 else "plains"
+                            if vehicle_mode == "foot":
+                                walk_spd = self.calculate_vehicle_speed(conn_terrain, 0, {"total_risk": 10}, "foot")
+                                total_travel_time_hours += (actual_conn_dist / max(1.5, walk_spd))
+                            elif conn_t:
+                                if vehicle_mode == "4x4":
+                                    total_travel_time_hours += conn_t * (65.0 / 74.0)
+                                elif vehicle_mode == "emergency_convoy":
+                                    total_travel_time_hours += conn_t * (65.0 / 50.0)
+                                else:
+                                    total_travel_time_hours += conn_t
+                            else:
+                                v_spd = self.calculate_vehicle_speed(conn_terrain, 0, {"total_risk": 10}, vehicle_mode)
+                                total_travel_time_hours += (actual_conn_dist / max(10.0, v_spd))
+                        else:
+                            if not (road_polyline and road_polyline[0] == [gps_lat, gps_lng]):
+                                road_polyline.insert(0, [gps_lat, gps_lng])
+
+                # If custom coordinate dest exists, connect from last highway node via real road
+                if user_gps_dest:
+                    dest_lat = user_gps_dest["lat"]
+                    dest_lng = user_gps_dest["lng"]
+                    last_node = NE_CITIES.get(path[-1])
+                    if last_node:
+                        conn_dist = haversine_distance(dest_lat, dest_lng, last_node["lat"], last_node["lng"])
+                        if conn_dist > 0.15:
+                            end_pts, end_d, end_t = fetch_osrm_road_geometry(last_node["lat"], last_node["lng"], dest_lat, dest_lng)
+                            actual_conn_dist = end_d if (end_pts and len(end_pts) >= 2) else conn_dist
+                            if end_pts and len(end_pts) >= 2:
+                                road_polyline = road_polyline + end_pts[1:]
+                            else:
+                                road_polyline.append([dest_lat, dest_lng])
+                            total_dist = round(total_dist + actual_conn_dist, 1)
+
+                            conn_terrain = "mountainous" if last_node.get("elevation", 0) > 600 else "plains"
+                            if vehicle_mode == "foot":
+                                walk_spd = self.calculate_vehicle_speed(conn_terrain, 0, {"total_risk": 10}, "foot")
+                                total_travel_time_hours += (actual_conn_dist / max(1.5, walk_spd))
+                            elif end_t:
+                                if vehicle_mode == "4x4":
+                                    total_travel_time_hours += end_t * (65.0 / 74.0)
+                                elif vehicle_mode == "emergency_convoy":
+                                    total_travel_time_hours += end_t * (65.0 / 50.0)
+                                else:
+                                    total_travel_time_hours += end_t
+                            else:
+                                v_spd = self.calculate_vehicle_speed(conn_terrain, 0, {"total_risk": 10}, vehicle_mode)
+                                total_travel_time_hours += (actual_conn_dist / max(10.0, v_spd))
+                        else:
+                            if not (road_polyline and road_polyline[-1] == [dest_lat, dest_lng]):
+                                road_polyline.append([dest_lat, dest_lng])
+
+                # Ensure start and end markers are present in coordinates list
+                if user_gps_origin:
+                    orig_disp_name = origin_custom_name or f"📍 Start ({user_gps_origin['lat']:.4f}, {user_gps_origin['lng']:.4f})"
+                    if not coordinates or coordinates[0].get("node_id") != "custom_origin":
+                        coordinates.insert(0, {
+                            "lat": user_gps_origin["lat"],
+                            "lng": user_gps_origin["lng"],
+                            "name": orig_disp_name,
+                            "node_id": "custom_origin"
+                        })
+                if user_gps_dest:
+                    dest_disp_name = dest_custom_name or f"🎯 Destination ({user_gps_dest['lat']:.4f}, {user_gps_dest['lng']:.4f})"
+                    if not coordinates or coordinates[-1].get("node_id") != "custom_dest":
+                        coordinates.append({
+                            "lat": user_gps_dest["lat"],
+                            "lng": user_gps_dest["lng"],
+                            "name": dest_disp_name,
+                            "node_id": "custom_dest"
+                        })
+
+            travel_time_hours = round(total_travel_time_hours, 2 if total_travel_time_hours < 2.0 else 1)
+            avg_risk = round(weighted_risk / total_dist, 1) if total_dist > 0 else 0
 
             # Overall recommendation
             if avg_risk < 30:
@@ -507,11 +737,33 @@ class NorthEastRoutingEngine:
         safe_result = format_path_details(safe_path, "Safest Recommended Route")
         direct_result = format_path_details(direct_path, "Direct / Fastest Route")
 
+        # For custom coordinate pairs where safe and direct path nodes match (inter-city), fetch unbroken end-to-end real road
+        if user_gps_origin and user_gps_dest and len(safe_path or []) > 1:
+            direct_pts, direct_d, direct_t = fetch_osrm_road_geometry(
+                user_gps_origin["lat"], user_gps_origin["lng"],
+                user_gps_dest["lat"], user_gps_dest["lng"]
+            )
+            if direct_pts and len(direct_pts) >= 20:
+                if safe_path == direct_path and safe_result:
+                    safe_result["road_polyline"] = direct_pts
+                    if direct_d and safe_result.get("total_distance_km", 0) > 0:
+                        dist_scale = direct_d / safe_result["total_distance_km"]
+                        safe_result["total_distance_km"] = direct_d
+                        scaled_t = safe_result["estimated_time_hours"] * dist_scale
+                        safe_result["estimated_time_hours"] = round(scaled_t, 2 if scaled_t < 2.0 else 1)
+                if direct_result:
+                    direct_result["road_polyline"] = direct_pts
+                    if direct_d and direct_result.get("total_distance_km", 0) > 0:
+                        dist_scale = direct_d / direct_result["total_distance_km"]
+                        direct_result["total_distance_km"] = direct_d
+                        scaled_t = direct_result["estimated_time_hours"] * dist_scale
+                        direct_result["estimated_time_hours"] = round(scaled_t, 2 if scaled_t < 2.0 else 1)
+
         # Determine if direct route is distinct from safe route
         is_same_route = safe_path == direct_path
 
-        origin_label = "📍 My Live GPS Location" if user_gps_origin else NE_CITIES.get(origin, {}).get("name", origin)
-        dest_label = "📍 Custom Destination" if user_gps_dest else NE_CITIES.get(destination, {}).get("name", destination)
+        origin_label = origin_custom_name if origin_custom_name else ("📍 My Live GPS Location" if user_gps_origin else NE_CITIES.get(origin, {}).get("name", origin))
+        dest_label = dest_custom_name if dest_custom_name else ("🎯 Custom Coordinates" if user_gps_dest else NE_CITIES.get(destination, {}).get("name", destination))
 
         return {
             "origin": origin,
